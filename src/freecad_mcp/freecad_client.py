@@ -38,6 +38,15 @@ class FreeCADConnection:
             "execute_python", code, timeout_seconds, timeout=timeout_seconds + 30,
         ))
 
+    def document_operations(
+        self, action: str, document: str | None = None, path: str | None = None,
+        discard_changes: bool = False, overwrite: bool = False,
+    ) -> dict:
+        return json.loads(self._call(
+            "document_operations", action, document, path,
+            discard_changes, overwrite, timeout=90,
+        ))
+
     def get_view(self, width: int = 1024, height: int = 768) -> str:
         return self._call("get_view", width, height, timeout=90)
 

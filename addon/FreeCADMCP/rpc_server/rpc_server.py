@@ -13,6 +13,7 @@ import FreeCADGui
 from PySide import QtCore
 
 from rpc_server.commands import register_commands, schedule_toggle_sync
+from rpc_server.document_operations import perform_document_operation
 from rpc_server.gui_dispatch import (
     cleanup_waker, dispatch_to_gui, get_dispatch_status, init_waker,
     process_gui_tasks, request_shutdown,
@@ -76,6 +77,41 @@ class FreeCADRPC:
             response = {"success": False, "error": str(response)}
         response.setdefault("cell_id", cell_id)
         response.setdefault("session_id", _python_session.session_id)
+        return json.dumps(response, ensure_ascii=False, allow_nan=False)
+
+    def document_operations(
+        self, action, document=None, path=None,
+        discard_changes=False, overwrite=False,
+    ) -> str:
+        """Manage live FreeCAD documents on the GUI thread."""
+        if not isinstance(action, str):
+            raise ValueError("action must be a string")
+        if document is not None and not isinstance(document, str):
+            raise ValueError("document must be a string or null")
+        if path is not None and not isinstance(path, str):
+            raise ValueError("path must be a string or null")
+        if type(discard_changes) is not bool or type(overwrite) is not bool:
+            raise ValueError("discard_changes and overwrite must be booleans")
+
+        def perform():
+            try:
+                return perform_document_operation(
+                    FreeCAD, FreeCADGui, action, document, path,
+                    discard_changes, overwrite,
+                )
+            except Exception as exc:
+                return {
+                    "success": False,
+                    "error": {"type": type(exc).__name__, "message": str(exc)},
+                }
+
+        result = dispatch_to_gui(
+            perform, operation_name=f"document_operations:{action}",
+        )
+        response = (
+            result if isinstance(result, dict) and result.get("success") is False
+            else {"success": True, "result": result}
+        )
         return json.dumps(response, ensure_ascii=False, allow_nan=False)
 
 

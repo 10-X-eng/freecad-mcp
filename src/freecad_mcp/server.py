@@ -5,7 +5,7 @@ import asyncio
 from contextlib import asynccontextmanager
 import json
 import logging
-from typing import Annotated
+from typing import Annotated, Literal
 
 from mcp.types import CallToolResult, ImageContent, TextContent
 from pydantic import Field
@@ -65,6 +65,26 @@ async def rpc_call(method, *args, status=False) -> CallToolResult:
             "success": False,
             "error": {"type": type(exc).__name__, "message": str(exc)},
         })
+
+
+@mcp.tool(structured_output=False)
+async def document_operations(
+    action: Literal["list", "new", "open", "activate", "save", "save_as", "reload", "close"],
+    document: str | None = None,
+    path: str | None = None,
+    discard_changes: bool = False,
+    overwrite: bool = False,
+) -> CallToolResult:
+    """Manage live FreeCAD documents. list needs no arguments; new needs
+    document; open needs path; activate/save/reload/close use document or the
+    active document; save_as needs path. Paths refer to .FCStd files on the
+    FreeCAD host. close/reload protect unsaved changes; save_as protects files
+    already on disk unless the corresponding boolean is explicitly true.
+    """
+    return await rpc_call(
+        connection().document_operations,
+        action, document, path, discard_changes, overwrite,
+    )
 
 
 @mcp.tool(structured_output=False)

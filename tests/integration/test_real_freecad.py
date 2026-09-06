@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 import struct
+import tempfile
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -36,7 +37,8 @@ async def exercise():
             await session.initialize()
             tools = await session.list_tools()
             assert [tool.name for tool in tools.tools] == [
-                "execute_python", "get_view", "get_runtime_status", "test_python",
+                "document_operations", "execute_python", "get_view",
+                "get_runtime_status", "test_python",
             ]
 
             async def call(name, args=None, success=True):
@@ -57,6 +59,66 @@ async def exercise():
             assert status["freecad_version"] == "1.1.3", status
             assert status["test_worker"]["state"] == "ready", status
             print("REAL FreeCAD version:", status["freecad_version"])
+
+            # The production document tool owns lifecycle and protects live edits.
+            with tempfile.TemporaryDirectory(prefix="freecad_mcp_documents_") as directory:
+                document_path = str(Path(directory) / "lifecycle.FCStd")
+                created = await call("document_operations", {
+                    "action": "new", "document": "MCP Document Lifecycle",
+                })
+                lifecycle_name = created["result"]["name"]
+                await run(
+                    f"lifecycle_doc = App.getDocument({lifecycle_name!r})\n"
+                    "lifecycle_box = lifecycle_doc.addObject('Part::Box', 'Box')\n"
+                    "lifecycle_box.Length = 10\nlifecycle_doc.recompute()"
+                )
+                saved = await call("document_operations", {
+                    "action": "save_as", "document": lifecycle_name,
+                    "path": document_path,
+                })
+                assert saved["result"]["path"] == document_path
+                listed = await call("document_operations", {"action": "list"})
+                assert any(
+                    item["name"] == lifecycle_name and item["path"] == document_path
+                    for item in listed["result"]["documents"]
+                )
+                await run("lifecycle_box.Length = 99\nlifecycle_doc.recompute()")
+                protected = await call("document_operations", {
+                    "action": "reload", "document": lifecycle_name,
+                }, False)
+                assert "unsaved changes" in protected["error"]
+                reloaded = await call("document_operations", {
+                    "action": "reload", "document": lifecycle_name,
+                    "discard_changes": True,
+                })
+                assert reloaded["result"]["name"] == lifecycle_name
+                await run(
+                    "lifecycle_box = lifecycle_doc.getObject('Box')\n"
+                    "assert lifecycle_box.Length.Value == 10\n"
+                    "lifecycle_box.Width = 12\nlifecycle_doc.recompute()"
+                )
+                await call("document_operations", {
+                    "action": "save", "document": lifecycle_name,
+                })
+                await call("document_operations", {
+                    "action": "close", "document": lifecycle_name,
+                })
+                opened = await call("document_operations", {
+                    "action": "open", "path": document_path,
+                })
+                reopened_name = opened["result"]["name"]
+                await run(
+                    f"reopened = App.getDocument({reopened_name!r})\n"
+                    "assert reopened.getObject('Box').Width.Value == 12"
+                )
+                await call("document_operations", {
+                    "action": "activate", "document": reopened_name,
+                })
+                await call("document_operations", {
+                    "action": "close", "document": reopened_name,
+                })
+                print("REAL_FREECAD_DOCUMENT_OPERATIONS_PASS")
+
             await run(
                 "import tempfile, os, math, sys, Part, Sketcher\n"
                 "integration_temp = tempfile.TemporaryDirectory(prefix='freecad_mcp_integration_')\n"

@@ -6,13 +6,15 @@ and older addons expose a different interface.
 
 | Tool | Purpose |
 | --- | --- |
+| `document_operations(action, document=None, path=None, ...)` | List, create, open, activate, save, reload, or safely close live FreeCAD documents. |
 | `execute_python(code, timeout_seconds=90)` | Run Python in the live FreeCAD GUI, retaining variables between calls. |
 | `get_view(width=1024, height=768)` | Return the current 3D view as an MCP PNG image. |
 | `get_runtime_status()` | Read FreeCAD version and execution health, even while the GUI is busy. |
 | `test_python(code, document_path=None, timeout_seconds=60)` | Run assertions/scripts in a fresh FreeCADCmd process, optionally opening a saved document copy. |
 
-Documents, objects, sketches, libraries, imports/exports, and FEM are all handled
-by the native Python API. There are no separate modeling tools.
+Document lifecycle has one focused tool. Objects, sketches, libraries,
+imports/exports, assemblies, and FEM are handled by the native Python API.
+There are no separate modeling tools.
 
 ## Install
 
@@ -43,6 +45,14 @@ This branch removes the old tool names and `--only-text-feedback` flag.
 Execution returns text; request images explicitly with `get_view`.
 
 ## Write, inspect, correct
+
+Use `document_operations` for file lifecycle instead of repeating boilerplate
+Python. Its actions are `list`, `new`, `open`, `activate`, `save`, `save_as`,
+`reload`, and `close`. It reports FreeCAD's actual internal document name,
+label, path, active/modified state, and object count. `open` and `save_as` use
+`.FCStd` paths on the FreeCAD host. `save_as` refuses to replace another file
+unless `overwrite=true`; `reload` and `close` refuse to discard modified state
+unless `discard_changes=true`.
 
 Submit a cell to `execute_python`:
 
@@ -150,11 +160,12 @@ FREECAD_MCP_INTEGRATION=1 uv run pytest -q -s tests/integration
 FREECAD_MCP_INTEGRATION=1 FREECAD_MCP_FEM=1 uv run pytest -q -s tests/integration
 ```
 
-It checks the actual MCP protocol, geometry, failed assertions and corrected
-code, sketches/booleans, PNG capture, FCStd/STEP round trips, busy/stuck status
-and recovery. It also verifies disposable process assertions, source-document
-preservation, forced timeout, abnormal exit and successful retry. The second
-command also executes real Gmsh/CalculiX.
+It checks the actual MCP protocol, document lifecycle and dirty-state guards,
+geometry, failed assertions and corrected code, sketches/booleans, PNG capture,
+FCStd/STEP round trips, busy/stuck status and recovery. It also verifies
+disposable process assertions, source-document preservation, forced timeout,
+abnormal exit and successful retry. The second command also executes real
+Gmsh/CalculiX.
 Set `FREECAD_MCP_HOST`/`FREECAD_MCP_PORT` to target a different test bridge.
 The FEM test may configure bundled solver paths in that isolated profile.
 Set `FREECAD_MCP_IMAGE_PATH` to save its captured PNG for inspection. Live

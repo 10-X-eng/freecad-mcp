@@ -5,16 +5,22 @@ import threading
 from freecad_mcp import server
 
 
-def test_only_transport_and_execution_tools_are_registered():
+def test_focused_python_and_document_tools_are_registered():
     async def inspect():
         tools = await server.mcp.list_tools()
         assert [tool.name for tool in tools] == [
-            "execute_python", "get_view", "get_runtime_status", "test_python",
+            "document_operations", "execute_python", "get_view",
+            "get_runtime_status", "test_python",
         ]
         assert await server.mcp.list_prompts() == []
-        schema = tools[0].inputSchema
-        assert schema["required"] == ["code"]
-        assert schema["properties"]["timeout_seconds"]["maximum"] == 3600
+        document_schema = tools[0].inputSchema
+        assert document_schema["required"] == ["action"]
+        assert document_schema["properties"]["action"]["enum"] == [
+            "list", "new", "open", "activate", "save", "save_as", "reload", "close",
+        ]
+        execution_schema = tools[1].inputSchema
+        assert execution_schema["required"] == ["code"]
+        assert execution_schema["properties"]["timeout_seconds"]["maximum"] == 3600
         assert sum(len(tool.description.split()) for tool in tools) <= 250
         assert server.mcp.instructions is None
     asyncio.run(inspect())
@@ -54,6 +60,17 @@ def test_python_failure_is_mcp_error_with_traceback(monkeypatch):
     result = asyncio.run(server.mcp.call_tool("execute_python", {"code": "assert False"}))
     assert result.isError
     assert "AssertionError at line 2" in result.content[0].text
+
+
+def test_document_operation_returns_structured_result(monkeypatch):
+    class Connection:
+        def document_operations(self, *args):
+            assert args == ("list", None, None, False, False)
+            return {"success": True, "result": {"documents": []}}
+    monkeypatch.setattr(server.state, "freecad_connection", Connection())
+    result = asyncio.run(server.mcp.call_tool("document_operations", {"action": "list"}))
+    assert not result.isError
+    assert json.loads(result.content[0].text) == {"result": {"documents": []}}
 
 
 def test_unavailable_bridge_reports_connection_failure(monkeypatch):

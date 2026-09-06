@@ -60,6 +60,35 @@ def test_python_cells_run_through_real_dispatch_and_xmlrpc(rpc_module):
         assert "assert answer == 0" in failed["error"]["traceback"]
 
 
+def test_document_operations_run_through_dispatch_and_xmlrpc(rpc_module):
+    document = types.SimpleNamespace(
+        Name="Doc", Label="Document", FileName="", Modified=False, Objects=[],
+    )
+    documents = {"Doc": document}
+    rpc_module.FreeCAD.listDocuments = lambda: documents
+    rpc_module.FreeCAD.activeDocument = lambda: document
+    rpc_module.FreeCAD.getDocument = lambda name: documents[name]
+    rpc_module.FreeCAD.setActiveDocument = lambda _name: None
+    rpc_module.FreeCADGui.getDocument = lambda name: documents[name]
+
+    with running_server(rpc_module.FreeCADRPC()) as (host, port), client(host, port, 5) as proxy:
+        result = json.loads(proxy.document_operations("list", None, None, False, False))
+
+    assert result == {"success": True, "result": {"documents": [{
+        "name": "Doc", "label": "Document", "path": None,
+        "active": True, "modified": False, "object_count": 0,
+    }]}}
+
+
+def test_document_operation_errors_are_structured(rpc_module):
+    rpc_module.FreeCAD.activeDocument = lambda: None
+    result = json.loads(rpc_module.FreeCADRPC().document_operations("save"))
+    assert result == {
+        "success": False,
+        "error": {"type": "DocumentOperationError", "message": "No active document"},
+    }
+
+
 def test_python_status_responds_while_cell_runs(rpc_module):
     rpc = rpc_module.FreeCADRPC()
     rpc_module.FreeCAD.Version = lambda: ["1", "1", "3"]

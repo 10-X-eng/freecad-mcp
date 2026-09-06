@@ -106,3 +106,24 @@ The desktop addon bridge was restarted without losing the live Python namespace
 or mounting-plate document. A live modal was closed through Python and the plate
 was edited from 8 to 10 mm afterward. Codex must restart to load the new MCP
 response formatter and tool descriptions.
+
+## Document operations (2026-09-06)
+
+Branch `feat/document-operations` adds one lifecycle tool with `list`, `new`,
+`open`, `activate`, `save`, `save_as`, `reload`, and `close` actions. Save-as
+protects existing files by default; reload and close protect modified GUI
+documents by default. Responses use FreeCAD's actual internal name and report
+path, active/modified state, and object count without a screenshot.
+
+The real FreeCAD 1.1.3 integration caught two assumptions that mocks did not:
+dirty state is exposed by `Gui.Document.Modified`, and saving through
+`App.Document` alone does not clear that GUI flag. The implementation now uses
+the GUI save operation and was rerun through a clean MCP/FreeCAD instance. The
+test created, saved, listed, protected/reloaded, saved, closed, reopened,
+activated, and closed a disposable FCStd document successfully.
+
+`uv run pytest -q`: 77 passed, 1 skipped. The full opt-in test passed against
+the official FreeCAD 1.1.3 GUI on port 9876 and printed
+`REAL_FREECAD_DOCUMENT_OPERATIONS_PASS`. Compilation, `git diff --check`, and
+source/wheel builds also passed. FEM was not rerun for this document-only
+change; the earlier real-solver results remain the baseline.
