@@ -1,8 +1,32 @@
-# FreeCAD MCP — Python interface
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/neka-nat-freecad-mcp-badge.png)](https://mseep.ai/app/neka-nat-freecad-mcp)
 
-This development branch lets an AI model control FreeCAD by writing Python.
+# FreeCAD MCP
+
+This fork of [neka-nat/freecad-mcp](https://github.com/neka-nat/freecad-mcp)
+lets an AI model control FreeCAD by writing Python.
 Install both the MCP server and addon from this checkout; the published package
 and older addons expose a different interface.
+
+## Demo
+
+### Design a flange
+
+![Flange demo](./assets/freecad_mcp4.gif)
+
+### Design a toy car
+
+![Toy car demo](./assets/make_toycar4.gif)
+
+### Design a part from a 2D drawing
+
+![Input 2D drawing](./assets/b9-1.png)
+
+![2D drawing demo](./assets/from_2ddrawing.gif)
+
+The original conversation is available in the
+[upstream shared transcript](https://claude.ai/share/7b48fd60-68ba-46fb-bb21-2fbb17399b48).
+
+## Python-first tool surface
 
 | Tool | Purpose |
 | --- | --- |
@@ -18,18 +42,71 @@ Document lifecycle has one focused tool. Objects, sketches, libraries,
 imports/exports, assemblies, and FEM are handled by the native Python API.
 There are no separate modeling tools.
 
-## Install
+## Install the FreeCAD addon
 
-Use FreeCAD 1.1.3 for the tested configuration. In FreeCAD's Python console,
-`App.getUserAppDataDir()` gives the correct profile directory for your platform.
-Put this checkout's `addon/FreeCADMCP` directory inside its `Mod` directory,
-restart FreeCAD, select the **MCP Addon** workbench, and click **Start RPC Server**.
+FreeCAD 1.1.3 is the tested configuration. FreeCAD addon directories include:
 
-The addon retains its toolbar controls for auto-start, remote connections and
-allowed IPs. Remote connections are disabled by default. Enable them only for
-trusted clients, configure allowed IPs, and restart the RPC server.
+- Windows: `%APPDATA%\FreeCAD\Mod\`
+- macOS:
+  - FreeCAD 1.1: `~/Library/Application Support/FreeCAD/v1-1/Mod/`
+  - FreeCAD 1.0: `~/Library/Application Support/FreeCAD/v1-0/Mod/`
+- Linux:
+  - Ubuntu: `~/.FreeCAD/Mod/`
+  - Ubuntu Snap: `~/snap/freecad/common/Mod/`
+  - Debian: `~/.local/share/FreeCAD/Mod/`
+  - Arch/CachyOS FreeCAD 1.1: `~/.local/share/FreeCAD/v1-1/Mod/`
+  - Flatpak: `~/.var/app/org.freecad.FreeCAD/data/FreeCAD/v1-1/Mod/`
 
-Configure your MCP client to run this checkout with [uv](https://docs.astral.sh/uv/):
+`App.getUserAppDataDir()` in FreeCAD's Python console reports the active profile
+directory. Place this checkout's `addon/FreeCADMCP` directory in that profile's
+`Mod` directory. For example:
+
+```bash
+git clone https://github.com/10-X-eng/freecad-mcp.git
+cd freecad-mcp
+
+# Ubuntu
+mkdir -p ~/.FreeCAD/Mod/
+cp -r addon/FreeCADMCP ~/.FreeCAD/Mod/
+
+# Debian
+mkdir -p ~/.local/share/FreeCAD/Mod/
+cp -r addon/FreeCADMCP ~/.local/share/FreeCAD/Mod/
+
+# Arch/CachyOS FreeCAD 1.1
+mkdir -p ~/.local/share/FreeCAD/v1-1/Mod/
+cp -r addon/FreeCADMCP ~/.local/share/FreeCAD/v1-1/Mod/
+
+# Flatpak
+mkdir -p ~/.var/app/org.freecad.FreeCAD/data/FreeCAD/v1-1/Mod/
+cp -r addon/FreeCADMCP ~/.var/app/org.freecad.FreeCAD/data/FreeCAD/v1-1/Mod/
+
+# macOS FreeCAD 1.1
+mkdir -p ~/Library/Application\ Support/FreeCAD/v1-1/Mod/
+cp -r addon/FreeCADMCP ~/Library/Application\ Support/FreeCAD/v1-1/Mod/
+```
+
+Restart FreeCAD after installing or updating the addon. Select **MCP Addon**
+from the workbench list:
+
+![MCP Addon in the workbench list](./assets/workbench_list.png)
+
+Start the bridge with **Start RPC Server** in the **FreeCAD MCP** toolbar:
+
+![Start RPC Server](./assets/start_rpc_server.png)
+
+### Auto-start the RPC server
+
+By default, start the RPC server manually whenever FreeCAD opens. To start it
+automatically, switch to the MCP Addon workbench and enable **FreeCAD MCP →
+Auto-Start Server**. The setting persists across sessions and can be disabled
+from the same menu.
+
+## Configure an MCP client
+
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then point
+the client at this checkout. For Claude Desktop, edit
+`claude_desktop_config.json`; other stdio MCP clients use the same command:
 
 ```json
 {
@@ -43,8 +120,38 @@ Configure your MCP client to run this checkout with [uv](https://docs.astral.sh/
 ```
 
 Use `--host HOST` and optionally `--port PORT` for a different bridge address.
-This branch removes the old tool names and `--only-text-feedback` flag.
+This fork removes the old tool names and `--only-text-feedback` flag.
 Execution returns text; request images explicitly with `GetView`.
+
+## Remote connections
+
+The FreeCAD bridge listens on localhost by default. To control it from another
+trusted machine:
+
+1. Enable **Remote Connections** in the **FreeCAD MCP** toolbar. The bridge will
+   bind to `0.0.0.0` after it is restarted.
+2. Select **Configure Allowed IPs** and enter comma-separated IP addresses or
+   CIDR ranges, for example `192.168.1.100, 10.0.0.0/24`.
+3. Restart the RPC server.
+4. Add `--host` with the FreeCAD machine's address to the MCP client command:
+
+```json
+{
+  "mcpServers": {
+    "freecad": {
+      "command": "uv",
+      "args": [
+        "--directory", "/path/to/freecad-mcp", "run", "freecad-mcp",
+        "--host", "192.168.1.100"
+      ]
+    }
+  }
+}
+```
+
+Remote access is disabled by default. Allow only trusted clients; Python cells
+run with the FreeCAD host user's filesystem and network privileges. The `--host`
+value must be a valid IPv4 address, IPv6 address, or hostname.
 
 ## Write, inspect, correct
 
@@ -183,5 +290,11 @@ Set `FREECAD_MCP_IMAGE_PATH` to save its captured PNG for inspection. Live
 integration has been verified on Linux with the official FreeCAD 1.1.3 build;
 Windows and macOS have not been exercised here.
 
-Derived from [neka-nat/freecad-mcp](https://github.com/neka-nat/freecad-mcp).
-Original authorship and license are retained.
+## Contributors
+
+<a href="https://github.com/neka-nat/freecad-mcp/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=neka-nat/freecad-mcp" alt="Upstream contributors" />
+</a>
+
+Made with [contrib.rocks](https://contrib.rocks). Original authorship and license
+are retained.
