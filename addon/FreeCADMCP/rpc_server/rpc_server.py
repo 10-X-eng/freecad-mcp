@@ -13,6 +13,7 @@ import FreeCADGui
 from PySide import QtCore
 
 from rpc_server.commands import register_commands, schedule_toggle_sync
+from rpc_server.document_inspection import inspect_document as inspect_document_data
 from rpc_server.document_operations import perform_document_operation
 from rpc_server.gui_dispatch import (
     cleanup_waker, dispatch_to_gui, get_dispatch_status, init_waker,
@@ -108,6 +109,47 @@ class FreeCADRPC:
         result = dispatch_to_gui(
             perform, operation_name=f"document_operations:{action}",
         )
+        response = (
+            result if isinstance(result, dict) and result.get("success") is False
+            else {"success": True, "result": result}
+        )
+        return json.dumps(response, ensure_ascii=False, allow_nan=False)
+
+    def inspect_document(
+        self, document=None, object_name=None, properties=None, max_depth=6,
+    ) -> str:
+        """Inspect native FreeCAD structure on the GUI thread."""
+        if document is not None and not isinstance(document, str):
+            raise ValueError("document must be a string or null")
+        if isinstance(document, str) and len(document) > 255:
+            raise ValueError("document must be at most 255 characters")
+        if object_name is not None and not isinstance(object_name, str):
+            raise ValueError("object_name must be a string or null")
+        if isinstance(object_name, str) and len(object_name) > 255:
+            raise ValueError("object_name must be at most 255 characters")
+        if properties is not None and (
+            not isinstance(properties, list)
+            or len(properties) > 100
+            or any(not isinstance(name, str) or len(name) > 255 for name in properties)
+        ):
+            raise ValueError(
+                "properties must be at most 100 strings of at most 255 characters"
+            )
+        if type(max_depth) is not int or not 1 <= max_depth <= 10:
+            raise ValueError("max_depth must be an integer between 1 and 10")
+
+        def perform():
+            try:
+                return inspect_document_data(
+                    FreeCAD, FreeCADGui, document, object_name, properties, max_depth,
+                )
+            except Exception as exc:
+                return {
+                    "success": False,
+                    "error": {"type": type(exc).__name__, "message": str(exc)},
+                }
+
+        result = dispatch_to_gui(perform, operation_name="inspect_document")
         response = (
             result if isinstance(result, dict) and result.get("success") is False
             else {"success": True, "result": result}

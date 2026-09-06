@@ -89,6 +89,25 @@ def test_document_operation_errors_are_structured(rpc_module):
     }
 
 
+def test_document_inspection_runs_through_dispatch_and_xmlrpc(rpc_module):
+    document = types.SimpleNamespace(
+        Name="Doc", Label="Document", FileName="", Objects=[],
+    )
+    rpc_module.FreeCAD.activeDocument = lambda: document
+    rpc_module.FreeCADGui.getDocument = lambda _name: types.SimpleNamespace(Modified=False)
+
+    with running_server(rpc_module.FreeCADRPC()) as (host, port), client(host, port, 5) as proxy:
+        result = json.loads(proxy.inspect_document(None, None, None, 6))
+
+    assert result == {"success": True, "result": {
+        "document": {
+            "name": "Doc", "label": "Document", "path": None,
+            "active": True, "modified": False, "object_count": 0,
+        },
+        "tree": [],
+    }}
+
+
 def test_python_status_responds_while_cell_runs(rpc_module):
     rpc = rpc_module.FreeCADRPC()
     rpc_module.FreeCAD.Version = lambda: ["1", "1", "3"]

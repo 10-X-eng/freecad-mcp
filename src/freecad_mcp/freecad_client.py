@@ -47,6 +47,15 @@ class FreeCADConnection:
             discard_changes, overwrite, timeout=90,
         ))
 
+    def inspect_document(
+        self, document: str | None = None, object_name: str | None = None,
+        properties: list[str] | None = None, max_depth: int = 6,
+    ) -> dict:
+        return json.loads(self._call(
+            "inspect_document", document, object_name, properties, max_depth,
+            timeout=90,
+        ))
+
     def get_view(self, width: int = 1024, height: int = 768) -> str:
         return self._call("get_view", width, height, timeout=90)
 

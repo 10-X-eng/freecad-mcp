@@ -37,7 +37,7 @@ async def exercise():
             await session.initialize()
             tools = await session.list_tools()
             assert [tool.name for tool in tools.tools] == [
-                "document_operations", "execute_python", "get_view",
+                "document_operations", "execute_python", "inspect_document", "get_view",
                 "get_runtime_status", "test_python",
             ]
 
@@ -72,6 +72,23 @@ async def exercise():
                     "lifecycle_box = lifecycle_doc.addObject('Part::Box', 'Box')\n"
                     "lifecycle_box.Length = 10\nlifecycle_doc.recompute()"
                 )
+                inspected = await call("inspect_document", {"document": lifecycle_name})
+                assert inspected["result"]["document"]["modified"] is True
+                assert inspected["result"]["document"]["object_count"] == 1
+                assert inspected["result"]["tree"] == [{
+                    "name": "Box", "type": "Part::Box",
+                }]
+                box_detail = await call("inspect_document", {
+                    "document": lifecycle_name, "object_name": "Box",
+                    "properties": ["Length", "Shape"],
+                })
+                assert box_detail["result"]["object"]["properties"]["Length"]["value"] == {
+                    "value": 10.0, "unit": "mm",
+                }
+                shape = box_detail["result"]["object"]["properties"]["Shape"]["value"]
+                assert shape["solids"] == 1
+                assert shape["volume"] == pytest.approx(1000.0)
+                print("REAL_FREECAD_DOCUMENT_INSPECTION_PASS")
                 saved = await call("document_operations", {
                     "action": "save_as", "document": lifecycle_name,
                     "path": document_path,

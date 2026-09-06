@@ -75,11 +75,10 @@ async def document_operations(
     discard_changes: bool = False,
     overwrite: bool = False,
 ) -> CallToolResult:
-    """Manage live FreeCAD documents. list needs no arguments; new needs
-    document; open needs path; activate/save/reload/close use document or the
-    active document; save_as needs path. Paths refer to .FCStd files on the
-    FreeCAD host. close/reload protect unsaved changes; save_as protects files
-    already on disk unless the corresponding boolean is explicitly true.
+    """Manage live .FCStd documents: list; new(document); open(path);
+    activate/save/reload/close(document or active); save_as(path). reload/close
+    require discard_changes=true when modified; save_as requires overwrite=true
+    before replacing another file.
     """
     return await rpc_call(
         connection().document_operations,
@@ -101,6 +100,24 @@ async def execute_python(
     code: check get_runtime_status before retrying. Full host privileges.
     """
     return await rpc_call(connection().execute_python, code, timeout_seconds)
+
+
+@mcp.tool(structured_output=False)
+async def inspect_document(
+    document: str | None = None,
+    object_name: str | None = None,
+    properties: list[str] | None = None,
+    max_depth: Annotated[int, Field(ge=1, le=10)] = 6,
+) -> CallToolResult:
+    """Inspect the active live document without changing it. With no
+    object_name, return its compact native GUI tree. With object_name, return
+    hierarchy, dependencies and property names; request selected property
+    values with properties. Internal object names are used, not labels.
+    """
+    return await rpc_call(
+        connection().inspect_document,
+        document, object_name, properties, max_depth,
+    )
 
 
 @mcp.tool(structured_output=False)

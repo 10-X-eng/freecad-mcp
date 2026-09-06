@@ -9,7 +9,7 @@ def test_focused_python_and_document_tools_are_registered():
     async def inspect():
         tools = await server.mcp.list_tools()
         assert [tool.name for tool in tools] == [
-            "document_operations", "execute_python", "get_view",
+            "document_operations", "execute_python", "inspect_document", "get_view",
             "get_runtime_status", "test_python",
         ]
         assert await server.mcp.list_prompts() == []
@@ -21,6 +21,8 @@ def test_focused_python_and_document_tools_are_registered():
         execution_schema = tools[1].inputSchema
         assert execution_schema["required"] == ["code"]
         assert execution_schema["properties"]["timeout_seconds"]["maximum"] == 3600
+        inspection_schema = tools[2].inputSchema
+        assert inspection_schema["properties"]["max_depth"]["maximum"] == 10
         assert sum(len(tool.description.split()) for tool in tools) <= 250
         assert server.mcp.instructions is None
     asyncio.run(inspect())
@@ -71,6 +73,19 @@ def test_document_operation_returns_structured_result(monkeypatch):
     result = asyncio.run(server.mcp.call_tool("document_operations", {"action": "list"}))
     assert not result.isError
     assert json.loads(result.content[0].text) == {"result": {"documents": []}}
+
+
+def test_document_inspection_returns_structured_result(monkeypatch):
+    class Connection:
+        def inspect_document(self, *args):
+            assert args == (None, None, None, 6)
+            return {"success": True, "result": {"document": {"name": "Model"}}}
+    monkeypatch.setattr(server.state, "freecad_connection", Connection())
+    result = asyncio.run(server.mcp.call_tool("inspect_document", {}))
+    assert not result.isError
+    assert json.loads(result.content[0].text) == {
+        "result": {"document": {"name": "Model"}},
+    }
 
 
 def test_unavailable_bridge_reports_connection_failure(monkeypatch):

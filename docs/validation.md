@@ -127,3 +127,22 @@ the official FreeCAD 1.1.3 GUI on port 9876 and printed
 `REAL_FREECAD_DOCUMENT_OPERATIONS_PASS`. Compilation, `git diff --check`, and
 source/wheel builds also passed. FEM was not rerun for this document-only
 change; the earlier real-solver results remain the baseline.
+
+## Native document inspection (2026-09-06)
+
+Branch `feat/document-inspection` adds one read-only `inspect_document` tool.
+Document scope follows each FreeCAD view provider's claimed children to match
+the GUI tree. Object scope returns parents, children, dependencies, dependents,
+visible property names, and only explicitly requested values. Bounded encoders
+cover quantities, vectors, placements, links, lists, maps, and shape summaries.
+
+The live 60-object bracket produced the correct `PartDefinitions` and `Assembly`
+roots in 3.8 KB of compact JSON. Hidden implementation properties were omitted
+from the default `Backplate` detail while an explicit request still returned its
+hidden `LinkPlacement` with editor mode. The complete tool-description budget is
+226 words across six tools.
+
+`uv run pytest -q`: 83 passed, 1 skipped. The clean opt-in MCP suite passed
+against the official FreeCAD 1.1.3 GUI on port 9876, including native tree,
+dirty-state, quantity-unit, and shape-summary checks. Compilation,
+`git diff --check`, and source/wheel builds passed. FEM was not rerun.
