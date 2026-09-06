@@ -247,7 +247,7 @@ def dispatch_to_gui(
             busy_for = time.monotonic() - _processing_since
             hint = (
                 f" (GUI thread has been busy for {busy_for:.1f}s — "
-                "consider execute_code_async for heavy OCCT operations)"
+                "check get_runtime_status before retrying)"
             )
         else:
             hint = ""

@@ -20,7 +20,7 @@ class FakeClock:
 def test_health_moves_from_busy_to_stuck_and_rejects_immediately() -> None:
     clock = FakeClock()
     health = DispatchHealth(clock)
-    health.start(7, "execute_code")
+    health.start(7, "execute_python")
     clock.now += 90.0
 
     busy = health.snapshot()
@@ -33,7 +33,7 @@ def test_health_moves_from_busy_to_stuck_and_rejects_immediately() -> None:
     assert stuck["state"] == "stuck"
     assert rejection is not None
     assert rejection["code"] == "GUI_DISPATCH_STUCK"
-    assert "execute_code" in rejection["error"]
+    assert "execute_python" in rejection["error"]
     assert "restart FreeCAD" in rejection["error"]
 
 
@@ -52,7 +52,7 @@ def test_finishing_timed_out_task_restores_healthy_state() -> None:
 def test_other_task_cannot_mark_or_clear_active_task() -> None:
     clock = FakeClock()
     health = DispatchHealth(clock)
-    health.start(3, "create_object")
+    health.start(3, "execute_python")
 
     assert health.mark_timed_out(4, 60) is None
     health.finish(4)

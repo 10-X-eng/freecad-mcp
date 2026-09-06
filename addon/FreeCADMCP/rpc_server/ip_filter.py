@@ -11,10 +11,9 @@ import FreeCAD
 class FilteredXMLRPCServer(ThreadingMixIn, SimpleXMLRPCServer):
     """XML-RPC server that filters connections by allowed IP addresses/subnets.
 
-    Threaded so get_rpc_status stays answerable while a wedged GUI task blocks
-    another request. Document queries and synchronous modelling handlers
-    serialise onto the GUI thread through dispatch_to_gui. The opt-in
-    execute_code_async worker retains its existing background execution.
+    Threaded so get_runtime_status stays answerable while a GUI task blocks
+    another request. Python cells and captures serialize onto the GUI thread
+    through dispatch_to_gui.
 
     daemon_threads must stay true — ThreadingMixIn.server_close() joins
     non-daemon request threads, which would make Stop wait out the stuck

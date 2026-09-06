@@ -48,16 +48,16 @@ class WedgedGuiThread:
         self.entered = threading.Event()
         self.release = threading.Event()
 
-    def execute_code(self, code: str) -> dict:
+    def execute_python(self, code: str) -> dict:
         self.entered.set()
         self.release.wait(30)
         return {"success": True, "message": code}
 
-    def get_rpc_status(self) -> dict:
+    def get_runtime_status(self) -> dict:
         return {
             "success": True,
             "rpc_server": "running",
-            "gui_dispatch": {"state": "stuck", "operation": "execute_code"},
+            "gui_dispatch": {"state": "stuck", "operation": "execute_python"},
         }
 
 
@@ -105,19 +105,19 @@ def test_request_threads_are_daemons_so_stop_does_not_join_them() -> None:
     assert server_class.daemon_threads is True
 
 
-def test_status_is_answered_while_execute_code_is_blocked() -> None:
+def test_status_is_answered_while_execute_python_is_blocked() -> None:
     interface = WedgedGuiThread()
     with running_server(interface) as (host, port):
         blocked = threading.Thread(
-            target=lambda: client(host, port, 30).execute_code("while True: pass"),
+            target=lambda: client(host, port, 30).execute_python("while True: pass"),
             daemon=True,
         )
         blocked.start()
         try:
             assert interface.entered.wait(5)
-            status = client(host, port, 5).get_rpc_status()
+            status = client(host, port, 5).get_runtime_status()
             assert status["gui_dispatch"]["state"] == "stuck"
-            assert status["gui_dispatch"]["operation"] == "execute_code"
+            assert status["gui_dispatch"]["operation"] == "execute_python"
         finally:
             interface.release.set()
             blocked.join(timeout=10)
@@ -139,7 +139,7 @@ def test_stopping_does_not_wait_for_an_in_flight_request() -> None:
     loop.start()
     host, port = server.server_address
     blocked = threading.Thread(
-        target=lambda: client(host, port, 30).execute_code("while True: pass"),
+        target=lambda: client(host, port, 30).execute_python("while True: pass"),
         daemon=True,
     )
     blocked.start()
