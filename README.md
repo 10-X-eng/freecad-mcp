@@ -213,14 +213,20 @@ fastener should use that attachment. File-backed addons are discovered without
 provider-specific code; the official Parts Library, for example, can be searched
 and its FCStd or STEP resources merged into the target document. Procedural
 workbenches require a small provider adapter because FreeCAD does not define a
-universal component-catalog API. The current procedural adapters are Fasteners
-and FCGear. FCGear exposes its individual gear families and their installed-version
-property schemas; connector and planetary commands are excluded because they
-operate on multiple existing objects rather than inserting one component.
+universal component-catalog API. The current procedural adapters are Fasteners,
+FCGear, and STEMFIE. FCGear exposes its individual gear families and their
+installed-version property schemas; connector and planetary commands are
+excluded because they operate on multiple existing objects rather than inserting
+one component. STEMFIE exposes its installed beams, braces, connectors, spacers,
+gears, plates, and shafts. Its inspection descriptions identify dimensionless
+STEMFIE Block Unit (BU) parameters; do not replace those with FreeCAD length
+strings.
 
 ```json
 {"action":"inspect","resource_id":"fcgear:InvoluteGear","properties":{"module":"2 mm","num_teeth":24,"height":"8 mm"}}
 {"action":"insert","resource_id":"fcgear:InvoluteGear","document":"Gearbox","properties":{"module":"2 mm","num_teeth":24,"height":"8 mm"}}
+{"action":"inspect","resource_id":"stemfie:STR_ESS","properties":{"HolesNumber":6,"SimpleShape":true}}
+{"action":"insert","resource_id":"stemfie:STR_ESS","document":"Assembly","properties":{"HolesNumber":6,"SimpleShape":true}}
 ```
 
 Dimensional resource properties reject bare numbers: always include a unit.

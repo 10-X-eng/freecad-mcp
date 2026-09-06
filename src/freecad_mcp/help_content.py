@@ -56,10 +56,11 @@ _HELP: dict[str, dict] = {
     },
     "resources": {
         "guidance": [
-            "ResourceOperations provides one interface for installed component providers such as Fasteners, FCGear, and Parts Library.",
+            "ResourceOperations provides one interface for installed component providers such as Fasteners, FCGear, STEMFIE, and Parts Library.",
             "Call action=providers, then search with a short query. Use the returned stable resource_id with inspect before insert when sizes or parameters matter.",
             "insert requires the internal document name. Fasteners accept properties such as Diameter, Length, and Thread; attach_to uses ObjectName.Edge1 or ObjectName.Face1.",
             "FCGear inspect returns its installed parameter schema; use exact lowercase names such as module, num_teeth, height, helix_angle, and axle_hole.",
+            "STEMFIE inspect returns the installed part parameters and descriptions. Some numeric parameters are STEMFIE Block Units (BU), not FreeCAD lengths; follow the returned description.",
             "Dimensional properties require explicit unit strings. freecad_units reports the configured profile schema; each inspected quantity includes the actual preferred unit FreeCAD selected for its magnitude.",
             "File-backed FCStd and STEP resources are discovered dynamically. Search results are references; nothing is inserted until action=insert.",
         ],

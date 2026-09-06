@@ -1,13 +1,13 @@
 import importlib.util
 from pathlib import Path
+import sys
 from types import SimpleNamespace
 
 import pytest
 
-RESOURCE_PATH = (
-    Path(__file__).resolve().parents[1]
-    / "addon" / "FreeCADMCP" / "rpc_server" / "resource_operations.py"
-)
+ADDON = Path(__file__).resolve().parents[1] / "addon" / "FreeCADMCP"
+sys.path.insert(0, str(ADDON))
+RESOURCE_PATH = ADDON / "rpc_server" / "resource_operations.py"
 _spec = importlib.util.spec_from_file_location("_resource_operations_test", RESOURCE_PATH)
 resources = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(resources)
@@ -67,6 +67,22 @@ def test_file_provider_search_and_inspection_are_compact(tmp_path):
     assert detail["path"] == str(part)
     assert detail["bytes"] == len(b"FCStd fixture")
     assert detail["license"].endswith("LICENSE-Assets")
+
+
+def test_stemfie_provider_is_independent_when_it_is_the_only_addon(tmp_path):
+    user = tmp_path / "user"
+    stemfie = user / "Mod" / "StemfieWB"
+    module = stemfie / "freecad" / "stemfie" / "Stemfie.py"
+    module.parent.mkdir(parents=True)
+    module.write_text("")
+    app = FakeApp(user, tmp_path / "home")
+
+    assert resources.resource_operations(app, None, "providers") == {
+        "providers": [{
+            "id": "stemfie", "kind": "parametric", "installed": True,
+            "root": str(stemfie), "actions": ["search", "inspect", "insert"],
+        }],
+    }
 
 
 def test_file_insert_returns_only_created_objects(tmp_path):

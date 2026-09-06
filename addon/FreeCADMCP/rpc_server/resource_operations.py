@@ -10,7 +10,7 @@ import re
 import sys
 from typing import Any
 
-from rpc_server import fcgear_provider
+from rpc_server import fcgear_provider, stemfie_provider
 from rpc_server.unit_safety import preferred_internal, require_explicit_quantity
 
 
@@ -70,6 +70,7 @@ def _file_providers(app) -> dict[str, Path]:
     excluded = {
         candidate for candidate in (
             _fasteners_root(app), fcgear_provider.find_root(_addon_dirs(app)),
+            stemfie_provider.find_root(_addon_dirs(app)),
         ) if candidate is not None
     }
     for root in user_addons:
@@ -171,6 +172,9 @@ def _providers(app) -> list[dict[str, Any]]:
     fcgear = fcgear_provider.provider(_addon_dirs(app))
     if fcgear is not None:
         result.append(fcgear)
+    stemfie = stemfie_provider.provider(_addon_dirs(app))
+    if stemfie is not None:
+        result.append(stemfie)
     for provider, root in _file_providers(app).items():
         result.append({
             "id": provider, "kind": "file", "installed": True,
@@ -387,6 +391,8 @@ def resource_operations(
             matches.extend(_fastener_matches(app, query))
         if provider in (None, "fcgear") and "fcgear" in installed:
             matches.extend(fcgear_provider.search(_addon_dirs(app), query))
+        if provider in (None, "stemfie") and "stemfie" in installed:
+            matches.extend(stemfie_provider.search(_addon_dirs(app), query))
         for current, root in _file_providers(app).items():
             if provider in (None, current):
                 matches.extend(_file_matches(current, root, query))
@@ -405,6 +411,10 @@ def resource_operations(
             return fcgear_provider.inspect_resource(
                 app, _addon_dirs(app), resource_id, properties,
             )
+        if resource_id.startswith("stemfie:"):
+            return stemfie_provider.inspect_resource(
+                app, _addon_dirs(app), resource_id, properties,
+            )
         return _file_details(app, resource_id)
     if action == "insert":
         if not resource_id:
@@ -413,6 +423,11 @@ def resource_operations(
             return _insert_fastener(app, resource_id, document, properties, attach_to)
         if resource_id.startswith("fcgear:"):
             return fcgear_provider.insert(
+                app, gui, _addon_dirs(app), resource_id, _document(app, document),
+                properties, attach_to,
+            )
+        if resource_id.startswith("stemfie:"):
+            return stemfie_provider.insert(
                 app, gui, _addon_dirs(app), resource_id, _document(app, document),
                 properties, attach_to,
             )

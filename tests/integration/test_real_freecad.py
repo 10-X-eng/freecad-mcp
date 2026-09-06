@@ -5,6 +5,7 @@ Set FREECAD_MCP_FEM=1 to also require installed Gmsh and CalculiX.
 Set FREECAD_MCP_CAM=1 to also build, post, simulate and reopen a CAM Job.
 Set FREECAD_MCP_RESOURCES=1 to require Fasteners and FreeCAD Parts Library.
 Set FREECAD_MCP_FCGEAR=1 with RESOURCES to require the external FCGear provider.
+Set FREECAD_MCP_STEMFIE=1 with RESOURCES to require the external STEMFIE provider.
 """
 
 import asyncio
@@ -371,10 +372,47 @@ async def exercise():
                             )
                         print("REAL_FREECAD_FCGEAR_RESOURCE_PASS")
 
+                    if os.environ.get("FREECAD_MCP_STEMFIE") == "1":
+                        assert "stemfie" in provider_ids, providers
+                        stemfie_parts = await call("ResourceOperations", {
+                            "action": "search", "provider": "stemfie",
+                            "query": "Beam Straight Ending Square Square", "limit": 5,
+                        })
+                        assert stemfie_parts["result"]["matches"][0]["id"] == (
+                            "stemfie:STR_ESS"
+                        )
+                        stemfie_info = await call("ResourceOperations", {
+                            "action": "inspect", "resource_id": "stemfie:STR_ESS",
+                            "properties": {"HolesNumber": 6, "SimpleShape": True},
+                        })
+                        stemfie_result = stemfie_info["result"]
+                        assert stemfie_result["category"] == "Beams"
+                        assert stemfie_result["effective_properties"] == {
+                            "HolesNumber": 6, "SimpleShape": True,
+                        }
+                        assert "Minimum" in stemfie_result["parameters"][
+                            "HolesNumber"
+                        ]["description"]
+                        assert stemfie_result["shape"]["solids"] == 1
+                        inserted_stemfie = await call("ResourceOperations", {
+                            "action": "insert", "resource_id": "stemfie:STR_ESS",
+                            "document": resource_doc,
+                            "properties": {"HolesNumber": 6, "SimpleShape": True},
+                        })
+                        stemfie_insert = inserted_stemfie["result"]
+                        assert stemfie_insert["properties"] == {
+                            "HolesNumber": 6, "SimpleShape": True,
+                        }
+                        assert stemfie_insert["shape"]["solids"] == 1
+                        print("REAL_FREECAD_STEMFIE_RESOURCE_PASS")
+
                     inspected_resources = await call("InspectDocument", {
                         "document": resource_doc,
                     })
-                    expected_objects = 5 if os.environ.get("FREECAD_MCP_FCGEAR") == "1" else 4
+                    expected_objects = 4 + sum(
+                        os.environ.get(flag) == "1"
+                        for flag in ("FREECAD_MCP_FCGEAR", "FREECAD_MCP_STEMFIE")
+                    )
                     assert inspected_resources["result"]["document"]["object_count"] >= expected_objects
                     print("REAL_FREECAD_RESOURCE_OPERATIONS_PASS")
 

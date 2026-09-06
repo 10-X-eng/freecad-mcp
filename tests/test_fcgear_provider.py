@@ -1,14 +1,14 @@
 import importlib.util
 from pathlib import Path
+import sys
 from types import SimpleNamespace
 
 import pytest
 
 
-PROVIDER_PATH = (
-    Path(__file__).resolve().parents[1]
-    / "addon" / "FreeCADMCP" / "rpc_server" / "fcgear_provider.py"
-)
+ADDON = Path(__file__).resolve().parents[1] / "addon" / "FreeCADMCP"
+sys.path.insert(0, str(ADDON))
+PROVIDER_PATH = ADDON / "rpc_server" / "fcgear_provider.py"
 _spec = importlib.util.spec_from_file_location("_fcgear_provider_test", PROVIDER_PATH)
 fcgear = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(fcgear)
