@@ -100,10 +100,26 @@ def _score(query: str, text: str, *, ignore_dimensions=False) -> int:
     return score if score or not query_text else -1
 
 
+def _metric_diameters(query: str) -> list[str]:
+    """Extract metric fastener diameters without treating ordinary words as sizes."""
+    return [
+        "M" + match.group(1)
+        for match in re.finditer(r"(?<![A-Za-z0-9])M\s*(\d+(?:\.\d+)?)", query, re.I)
+    ]
+
+
 def _fastener_matches(app, query: str) -> list[dict[str, Any]]:
     _, module = _fastener_modules(app)
     matches = []
+    requested_diameters = _metric_diameters(query)
     for standard, data in module.FSScrewCommandTable.items():
+        if requested_diameters:
+            supported = {
+                str(value).strip("()").upper()
+                for value in module.screwMaker.GetAllDiams(standard)
+            }
+            if not all(diameter in supported for diameter in requested_diameters):
+                continue
         description = module.FSGetDescription(standard)
         group = str(data[module.CMD_GROUP])
         score = _score(query, f"{standard} {description} {group}", ignore_dimensions=True)

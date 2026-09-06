@@ -139,3 +139,32 @@ def test_search_merges_installed_provider_results(monkeypatch, tmp_path):
     assert [item["id"] for item in result["matches"]] == ["fasteners:ISO4762"]
     assert result["truncated"] is True
     assert "_score" not in result["matches"][0]
+
+
+def test_fastener_search_filters_incompatible_metric_series(monkeypatch, tmp_path):
+    app = FakeApp(tmp_path / "user", tmp_path / "home")
+    module = SimpleNamespace(
+        CMD_GROUP=0,
+        FSScrewCommandTable={
+            "ISO4762": ("Hexagon socket",),
+            "DIN7984": ("Hexagon socket",),
+            "ASMEB18.3.1A": ("Hexagon socket",),
+        },
+        FSGetDescription=lambda standard: {
+            "ISO4762": "ISO 4762 Hexagon socket head cap screw",
+            "DIN7984": "DIN 7984 Hexagon socket low head screw",
+            "ASMEB18.3.1A": "ASME UNC Hex socket head cap screw",
+        }[standard],
+        screwMaker=SimpleNamespace(GetAllDiams=lambda standard: {
+            "ISO4762": ["M6", "M8", "M10"],
+            "DIN7984": ["M6", "M8", "M10"],
+            "ASMEB18.3.1A": ["#10", "1/4in", "5/16in"],
+        }[standard]),
+    )
+    monkeypatch.setattr(resources, "_fastener_modules", lambda _app: (tmp_path, module))
+
+    matches = resources._fastener_matches(app, "M8 socket head screw")
+    assert {item["id"] for item in matches} == {
+        "fasteners:ISO4762", "fasteners:DIN7984",
+    }
+    assert resources._metric_diameters("M 8 and (M14) fasteners") == ["M8", "M14"]
