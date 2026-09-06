@@ -2,17 +2,9 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator, Dict, Literal
 
-try:
-    # mcp 1.x
-    from mcp.server.fastmcp import Context, FastMCP
-except ImportError:
-    # mcp 2.x moved mcp.server.fastmcp to mcp.server.mcpserver and renamed
-    # FastMCP to MCPServer; the API surface used here is unchanged.
-    from mcp.server.mcpserver import Context
-    from mcp.server.mcpserver import MCPServer as FastMCP
 from mcp.types import ImageContent, TextContent
 
-from .freecad_client import FreeCADConnection
+from .mcp_compat import Context, FastMCP
 from .operations import (
     create_document_operation,
     create_object_operation,
@@ -31,7 +23,7 @@ from .operations import (
     run_fem_analysis_operation,
 )
 from .prompt_text import ASSET_CREATION_STRATEGY
-from .server_state import ServerState
+from .server_state import disconnect_freecad, get_freecad_connection, state
 
 
 logging.basicConfig(
@@ -44,15 +36,12 @@ ViewName = Literal[
     "Isometric", "Front", "Top", "Right", "Back", "Left", "Bottom", "Dimetric", "Trimetric"
 ]
 
-state = ServerState()
-
-
 @asynccontextmanager
 async def server_lifespan(server: FastMCP) -> AsyncIterator[Dict[str, Any]]:
     try:
         logger.info("FreeCADMCP server starting up")
         try:
-            _ = get_freecad_connection()
+            get_freecad_connection()
             logger.info("Successfully connected to FreeCAD on startup")
         except Exception as e:
             logger.warning(f"Could not connect to FreeCAD on startup: {str(e)}")
@@ -63,8 +52,7 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[Dict[str, Any]]:
     finally:
         if state.freecad_connection:
             logger.info("Disconnecting from FreeCAD on shutdown")
-            state.freecad_connection.disconnect()
-            state.freecad_connection = None
+            disconnect_freecad()
         logger.info("FreeCADMCP server shut down")
 
 
@@ -73,19 +61,6 @@ mcp = FastMCP(
     instructions="FreeCAD integration through the Model Context Protocol",
     lifespan=server_lifespan,
 )
-
-
-def get_freecad_connection() -> FreeCADConnection:
-    """Get or create a persistent FreeCAD connection"""
-    if state.freecad_connection is None:
-        state.freecad_connection = FreeCADConnection(host=state.rpc_host, port=9875)
-        if not state.freecad_connection.ping():
-            logger.error("Failed to ping FreeCAD")
-            state.freecad_connection = None
-            raise Exception(
-                "Failed to connect to FreeCAD. Make sure the FreeCAD addon is running."
-            )
-    return state.freecad_connection
 
 
 @mcp.tool(structured_output=False)
