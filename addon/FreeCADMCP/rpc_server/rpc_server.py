@@ -370,11 +370,11 @@ class FreeCADRPC:
             )
         if not os.path.exists(file_path):
             return f"File for '{doc_name}' not found at {file_path!r}."
-        # Close, then reopen from the same file. Reopen preserves the
-        # original document name when the file was previously saved
-        # under that name.
-        FreeCAD.closeDocument(doc_name)
-        FreeCAD.openDocument(file_path)
+        # Reload into the existing document. ``FreeCAD.openDocument`` derives
+        # a new internal name from the filename, which can silently change the
+        # name callers must use for every later RPC request. Document.load()
+        # refreshes the on-disk state while preserving the existing name.
+        doc.load(file_path)
         FreeCAD.Console.PrintMessage(
             f"Document '{doc_name}' reloaded from '{file_path}' via RPC.\n"
         )

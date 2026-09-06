@@ -88,6 +88,31 @@ def test_script_names_cannot_replace_rpc_internals(rpc_module: types.ModuleType)
     assert rpc.get_object("Doc", "Box") == {"Name": "Box"}
 
 
+def test_reload_document_preserves_internal_name(
+    rpc_module: types.ModuleType, tmp_path: Path,
+) -> None:
+    file_path = tmp_path / "different-file-name.FCStd"
+    file_path.touch()
+    loaded_paths: list[str] = []
+    document = types.SimpleNamespace(
+        FileName=str(file_path),
+        load=loaded_paths.append,
+    )
+    rpc_module.FreeCAD.listDocuments = lambda: {"Doc": document}
+    rpc_module.FreeCAD.getDocument = lambda name: document if name == "Doc" else None
+    rpc_module.FreeCAD.closeDocument = lambda _name: pytest.fail(
+        "reload must not close the named document"
+    )
+    rpc_module.FreeCAD.openDocument = lambda _path: pytest.fail(
+        "reload must not derive a new name from the filename"
+    )
+
+    result = rpc_module.FreeCADRPC().reload_document("Doc")
+
+    assert result == {"success": True, "document_name": "Doc"}
+    assert loaded_paths == [str(file_path)]
+
+
 def test_async_scripts_share_variables_without_replacing_dispatch(
     rpc_module: types.ModuleType,
 ) -> None:
