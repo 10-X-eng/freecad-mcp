@@ -6,19 +6,18 @@ from mcp.types import ImageContent, TextContent
 
 from .mcp_compat import Context, FastMCP
 from .operations import (
-    execute_code_async_operation,
-    execute_code_operation,
     get_parts_list_operation,
     get_rpc_status_operation,
-    get_view_operation,
     insert_part_from_library_operation,
     run_fem_analysis_operation,
 )
 from .prompt_text import ASSET_CREATION_STRATEGY
 from .server_state import disconnect_freecad, get_freecad_connection, state
 from .tools.documents import create_document, list_documents, reload_document
+from .tools.execution import execute_code, execute_code_async
 from .tools.objects import create_object, delete_object, edit_object, get_object, get_objects
 from .tools.types import ViewName
+from .tools.views import get_view
 
 
 logging.basicConfig(
@@ -67,105 +66,13 @@ mcp.tool(structured_output=False)(edit_object)
 mcp.tool(structured_output=False)(delete_object)
 
 
-@mcp.tool(structured_output=False)
-def execute_code_async(ctx: Context, code: str) -> list[TextContent]:
-    """Execute Python code in FreeCAD without waiting for completion.
-
-    Use this ONLY for long-running background computations that do NOT touch the
-    FreeCAD GUI or mutate the FreeCAD document tree directly.
-
-    This tool runs the submitted code in a background thread and returns
-    immediately. Because it does not run on FreeCAD's main GUI thread, the code
-    must NOT call FreeCADGui APIs, manipulate the active view or selection, create
-    or edit document objects, change object properties, call doc.recompute(), or
-    save documents.
-
-    For code that touches FreeCAD documents, document objects, FreeCADGui, the
-    active view, selection, recompute, or save operations, use execute_code instead.
-    execute_code runs on the FreeCAD GUI thread and is the safe default for normal
-    FreeCAD automation.
-
-    Use execute_code_async only for background-safe work such as long-running
-    pure OCCT geometry calculations (e.g. fuse/cut/loft on already-fetched shapes)
-    or other CPU-bound computations that do not interact with the document or GUI.
-
-    Typical usage pattern:
-    1. Fetch shapes into local variables first (via execute_code on the GUI thread).
-    2. Store intermediate results in a module-level Python variable (not in the
-       FreeCAD document) so execute_code can read them later.
-    3. Run the heavy computation via execute_code_async.
-    4. After the expected computation time has elapsed, apply results to the
-       document via execute_code (which runs on the GUI thread).
-
-    Args:
-        code: Background-safe Python code to execute.
-
-    Returns:
-        A message confirming that background execution has started.
-    """
-    return execute_code_async_operation(get_freecad_connection(), code)
+mcp.tool(structured_output=False)(execute_code_async)
 
 
-@mcp.tool(structured_output=False)
-def execute_code(
-    ctx: Context,
-    code: str,
-    include_screenshot: bool = True,
-    view_name: ViewName = "Isometric",
-) -> list[TextContent | ImageContent]:
-    """Execute arbitrary Python code in FreeCAD.
-
-    Args:
-        code: The Python code to execute.
-        include_screenshot: Whether to return a screenshot of the model (default True).
-            Set to False to save tokens when the code does not change the model's
-            appearance, e.g. analytical or computational scripts whose result is
-            printed output, or intermediate steps in a longer sequence of changes.
-        view_name: The view orientation of the returned screenshot (default "Isometric").
-            Pick the view that best shows the change being made.
-
-    Returns:
-        A message indicating the success or failure of the code execution, the output of the code execution, and a screenshot of the object.
-    """
-    return execute_code_operation(
-        get_freecad_connection(),
-        state.only_text_feedback,
-        code,
-        include_screenshot,
-        view_name,
-    )
+mcp.tool(structured_output=False)(execute_code)
 
 
-@mcp.tool(structured_output=False)
-def get_view(
-    ctx: Context,
-    view_name: ViewName,
-    width: int | None = None,
-    height: int | None = None,
-    focus_object: str | None = None,
-) -> list[ImageContent | TextContent]:
-    """Get a screenshot of the active view.
-
-    Args:
-        view_name: The name of the view to get the screenshot of.
-        The following views are available:
-        - "Isometric"
-        - "Front"
-        - "Top"
-        - "Right"
-        - "Back"
-        - "Left"
-        - "Bottom"
-        - "Dimetric"
-        - "Trimetric"
-        width: The width of the screenshot in pixels. If not specified, uses the viewport width.
-        height: The height of the screenshot in pixels. If not specified, uses the viewport height.
-        focus_object: The name of the object to focus on. If not specified, fits all objects in the view.
-
-    Returns:
-        A screenshot of the active view.
-    """
-    return get_view_operation(get_freecad_connection(), view_name, width, height, focus_object)
+mcp.tool(structured_output=False)(get_view)
 
 
 @mcp.tool(structured_output=False)
