@@ -105,6 +105,11 @@ A timed-out running cell marks dispatch as stuck and later GUI calls fail
 immediately until it finishes. Check `get_runtime_status` before retrying.
 If execution never finishes, restart FreeCAD manually. Python has the same
 filesystem and process privileges as FreeCAD; it is not a security sandbox.
+Python remains available while menus or non-blocking modal dialogs are open,
+so it can inspect and close them through Qt. Prefer `dialog.open()`/`show()`;
+calling a blocking `dialog.exec()` inside a cell keeps that cell running and
+prevents another live cell from entering until it returns. Avoid editing the
+same document manually while a model is modifying it.
 
 Use `test_python` to check a complete script before applying it to the live
 document. Every test starts a new FreeCADCmd on the FreeCAD host with its own

@@ -66,3 +66,17 @@ sanity bounds. The captured PNG was also visually inspected.
 Compilation, `git diff --check`, and source/wheel builds passed. Windows and
 macOS were not exercised. Headless tests do not cover GUI workbench behavior
 or unsaved live state, and process isolation is not a security sandbox.
+
+## GUI interaction regression (2026-09-06)
+
+Branch `fix/gui-interaction-dispatch` removes the blanket mouse/menu/modal
+dispatch gate. A real desktop MCP call timed out before executing; a controlled
+modal-dialog probe reproduced the same starvation while status reported healthy.
+The fix lets Python inspect/close UI elements without removing the in-flight
+task re-entrancy guard or stuck-task protection.
+
+Three regression tests failed before the fix. Afterward, `uv run pytest -q`
+reported 44 passed, 1 skipped. The full opt-in suite passed against a separate
+real FreeCAD 1.1.3 GUI on port 9876, now including open-modal and open-popup
+inspection/closure through MCP. FEM was not rerun for this dispatch-only change;
+the earlier FEM results above remain the recorded baseline.

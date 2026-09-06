@@ -7,6 +7,8 @@ import time
 import types
 from typing import Iterator
 
+import pytest
+
 
 ADDON_DIR = Path(__file__).resolve().parents[1] / "addon" / "FreeCADMCP"
 GUI_DISPATCH_PATH = ADDON_DIR / "rpc_server" / "gui_dispatch.py"
@@ -195,3 +197,31 @@ def test_queued_timeout_cancels_task_without_marking_dispatch_stuck() -> None:
         assert "code" not in result
         assert not ran.is_set()
         assert gui_dispatch.get_dispatch_status()["state"] == "healthy"
+
+
+@pytest.mark.parametrize("interaction", ["mouseButtons", "activePopupWidget", "activeModalWidget"])
+def test_python_dispatch_is_available_during_gui_interactions(monkeypatch, interaction):
+    # Python must be able to inspect/close a dialog or menu. An active UI
+    # interaction is not an in-flight MCP task and must not starve the queue.
+    with load_gui_dispatch() as gui_dispatch:
+        monkeypatch.setattr(FakeApplication, interaction, staticmethod(lambda: 1))
+        waker = ThreadedWaker(gui_dispatch)
+        gui_dispatch._waker = waker
+        result = gui_dispatch.dispatch_to_gui(lambda: "reachable", timeout=0.1)
+        waker.join()
+        assert result == "reachable"
+
+
+def test_event_processing_inside_a_task_cannot_start_a_nested_task():
+    with load_gui_dispatch() as gui_dispatch:
+        observed = []
+
+        def first():
+            observed.append("first entered")
+            gui_dispatch._rpc_request_queue.put(lambda: observed.append("second"))
+            gui_dispatch.process_gui_tasks(reschedule=False)
+            observed.append("first finished")
+
+        gui_dispatch._rpc_request_queue.put(first)
+        gui_dispatch.process_gui_tasks(reschedule=False)
+        assert observed == ["first entered", "first finished", "second"]

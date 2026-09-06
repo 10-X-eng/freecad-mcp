@@ -83,6 +83,30 @@ async def exercise():
                 assert (await run("if", False))["error"]["type"] == "SyntaxError"
                 assert (await run("40 + 2"))["result"] == 42
 
+                # A menu/dialog must not block the Python needed to inspect or
+                # close it. Fallback timers prevent a regression stranding the UI.
+                await run(
+                    "from PySide import QtCore, QtWidgets\n"
+                    "dispatch_dialog = QtWidgets.QDialog(Gui.getMainWindow())\n"
+                    "dispatch_dialog.setModal(True)\n"
+                    "QtCore.QTimer.singleShot(10000, dispatch_dialog.reject)\n"
+                    "dispatch_dialog.show()"
+                )
+                await run(
+                    "assert QtWidgets.QApplication.activeModalWidget() is dispatch_dialog\n"
+                    "dispatch_dialog.reject()", timeout=3,
+                )
+                await run(
+                    "dispatch_menu = QtWidgets.QMenu(Gui.getMainWindow())\n"
+                    "dispatch_menu.addAction('MCP dispatch test')\n"
+                    "QtCore.QTimer.singleShot(10000, dispatch_menu.close)\n"
+                    "dispatch_menu.popup(Gui.getMainWindow().mapToGlobal(QtCore.QPoint(100, 100)))"
+                )
+                await run(
+                    "assert QtWidgets.QApplication.activePopupWidget() is dispatch_menu\n"
+                    "dispatch_menu.close()", timeout=3,
+                )
+
                 # Workbench creation and shape booleans use the native API directly.
                 await run(
                     "sketch = doc.addObject('Sketcher::SketchObject', 'Sketch')\n"

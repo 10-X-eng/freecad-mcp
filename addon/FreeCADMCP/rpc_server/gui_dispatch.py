@@ -14,8 +14,8 @@ Robustness and performance guarantees:
    RPC thread; the GUI thread processes the task immediately rather than
    waiting for the next 500 ms heartbeat tick. The 500 ms heartbeat is kept
    only as a fallback.
-3. Mouse-button guard: ``process_gui_tasks`` skips the current tick while
-   mouse buttons are held so MCP tasks cannot interrupt 3D navigation drags.
+3. UI reachability: mouse input, menus and modal dialogs do not block Python.
+   Otherwise the caller cannot inspect or dismiss the UI using the Python API.
 4. Clean shutdown: the ``_SHUTDOWN`` sentinel sets a flag that suppresses the
    ``finally`` reschedule, so ``stop_rpc_server`` actually stops the loop.
 5. Exception isolation: exceptions inside a task are caught, logged, and
@@ -103,8 +103,8 @@ def _flush_gui_events(delay_ms: int = 20) -> None:
 def process_gui_tasks(reschedule: bool = True) -> None:
     """Drain queued GUI-thread callables and optionally reschedule.
 
-    Skips the current tick when any mouse button is held (e.g., 3D navigation
-    drag) or when already executing a task (re-entrancy guard). The guard
+    Skips the current tick when already executing a task (re-entrancy guard).
+    Menus, dialogs and mouse input must not starve the queue. The guard
     prevents ``doc.recompute()`` or ``processEvents()`` inside a task from
     triggering a nested ``process_gui_tasks`` call that corrupts FreeCAD state.
 
@@ -119,13 +119,6 @@ def process_gui_tasks(reschedule: bool = True) -> None:
     try:
         if _rpc_request_queue.empty():
             return  # nothing queued; skip cursor/status-bar churn on idle heartbeat ticks
-        if QtWidgets.QApplication.mouseButtons() != QtCore.Qt.NoButton:
-            return  # user is dragging; defer to next tick
-        if QtWidgets.QApplication.activePopupWidget() is not None:
-            return  # context menu or popup open; defer to next tick
-        if QtWidgets.QApplication.activeModalWidget() is not None:
-            return  # modal dialog open; defer to next tick
-
         _processing = True
         _processing_since = time.monotonic()
         app = QtWidgets.QApplication.instance()
