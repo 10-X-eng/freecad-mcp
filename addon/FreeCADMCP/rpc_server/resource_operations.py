@@ -10,6 +10,8 @@ import re
 import sys
 from typing import Any
 
+from rpc_server import fcgear_provider
+
 
 COMPONENT_SUFFIXES = {".fcstd", ".step", ".stp"}
 _FILE_CACHE: dict[str, list[Path]] = {}
@@ -64,11 +66,16 @@ def _file_providers(app) -> dict[str, Path]:
         sorted(user_mod.iterdir(), key=lambda path: path.name.casefold())
         if user_mod.is_dir() else []
     )
+    excluded = {
+        candidate for candidate in (
+            _fasteners_root(app), fcgear_provider.find_root(_addon_dirs(app)),
+        ) if candidate is not None
+    }
     for root in user_addons:
         if not root.is_dir():
             continue
         root = root.resolve()
-        if root == _fasteners_root(app):
+        if root in excluded:
             continue
         if root.name.casefold() in {"parts_library", "freecad-library"}:
             providers["parts_library"] = root
@@ -160,6 +167,9 @@ def _providers(app) -> list[dict[str, Any]]:
             "id": "fasteners", "kind": "parametric", "installed": True,
             "root": str(fasteners), "actions": ["search", "inspect", "insert"],
         })
+    fcgear = fcgear_provider.provider(_addon_dirs(app))
+    if fcgear is not None:
+        result.append(fcgear)
     for provider, root in _file_providers(app).items():
         result.append({
             "id": provider, "kind": "file", "installed": True,
@@ -367,6 +377,8 @@ def resource_operations(
         installed = {item["id"] for item in _providers(app)}
         if provider in (None, "fasteners") and "fasteners" in installed:
             matches.extend(_fastener_matches(app, query))
+        if provider in (None, "fcgear") and "fcgear" in installed:
+            matches.extend(fcgear_provider.search(_addon_dirs(app), query))
         for current, root in _file_providers(app).items():
             if provider in (None, current):
                 matches.extend(_file_matches(current, root, query))
@@ -381,11 +393,20 @@ def resource_operations(
             raise ResourceOperationError("resource_id is required for inspect")
         if resource_id.startswith("fasteners:"):
             return _fastener_details(app, resource_id, properties)
+        if resource_id.startswith("fcgear:"):
+            return fcgear_provider.inspect_resource(
+                app, _addon_dirs(app), resource_id, properties,
+            )
         return _file_details(app, resource_id)
     if action == "insert":
         if not resource_id:
             raise ResourceOperationError("resource_id is required for insert")
         if resource_id.startswith("fasteners:"):
             return _insert_fastener(app, resource_id, document, properties, attach_to)
+        if resource_id.startswith("fcgear:"):
+            return fcgear_provider.insert(
+                app, gui, _addon_dirs(app), resource_id, _document(app, document),
+                properties, attach_to,
+            )
         return _insert_file(app, resource_id, document)
     raise ResourceOperationError(f"Unsupported resource action: {action}")

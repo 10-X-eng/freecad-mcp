@@ -55,9 +55,10 @@ _HELP: dict[str, dict] = {
     },
     "resources": {
         "guidance": [
-            "ResourceOperations provides one interface for installed component providers such as Fasteners and Parts Library.",
+            "ResourceOperations provides one interface for installed component providers such as Fasteners, FCGear, and Parts Library.",
             "Call action=providers, then search with a short query. Use the returned stable resource_id with inspect before insert when sizes or parameters matter.",
             "insert requires the internal document name. Fasteners accept properties such as Diameter, Length, and Thread; attach_to uses ObjectName.Edge1 or ObjectName.Face1.",
+            "FCGear inspect returns its installed parameter schema; use exact lowercase names such as module, num_teeth, height, helix_angle, and axle_hole.",
             "File-backed FCStd and STEP resources are discovered dynamically. Search results are references; nothing is inserted until action=insert.",
         ],
         "related": ["documents", "workbenches", "inspection", "validation"],

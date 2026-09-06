@@ -34,7 +34,7 @@ The original conversation is available in the
 | `DocumentOperations(action, document=None, path=None, ...)` | List, create, open, activate, save, reload, or safely close live FreeCAD documents. |
 | `ExecutePython(code, timeout_seconds=90)` | Run Python in the live FreeCAD GUI, retaining variables between calls. |
 | `InspectDocument(document=None, object_name=None, properties=None, max_depth=6)` | Read the native GUI tree or focused object dependencies and property values. |
-| `ResourceOperations(action, ...)` | Discover, search, inspect, and insert components from installed providers such as Fasteners and Parts Library. |
+| `ResourceOperations(action, ...)` | Discover, search, inspect, and insert components from installed providers such as Fasteners, FCGear, and Parts Library. |
 | `GetView(width=1024, height=768)` | Return the current 3D view as an MCP PNG image. |
 | `GetRuntimeStatus()` | Read FreeCAD version and execution health, even while the GUI is busy. |
 | `TestPython(code, document_path=None, timeout_seconds=60)` | Run assertions/scripts in a fresh FreeCADCmd process, optionally opening a saved document copy. |
@@ -213,7 +213,15 @@ fastener should use that attachment. File-backed addons are discovered without
 provider-specific code; the official Parts Library, for example, can be searched
 and its FCStd or STEP resources merged into the target document. Procedural
 workbenches require a small provider adapter because FreeCAD does not define a
-universal component-catalog API. The current procedural adapter is Fasteners.
+universal component-catalog API. The current procedural adapters are Fasteners
+and FCGear. FCGear exposes its individual gear families and their installed-version
+property schemas; connector and planetary commands are excluded because they
+operate on multiple existing objects rather than inserting one component.
+
+```json
+{"action":"inspect","resource_id":"fcgear:InvoluteGear","properties":{"module":2,"num_teeth":24,"height":8}}
+{"action":"insert","resource_id":"fcgear:InvoluteGear","document":"Gearbox","properties":{"module":2,"num_teeth":24,"height":8}}
+```
 
 You can also assign `_result` explicitly in a cell that ends in a statement.
 `_` holds the last successful expression result. `App`/`FreeCAD` and
@@ -301,6 +309,7 @@ FREECAD_MCP_INTEGRATION=1 uv run pytest -q -s tests/integration
 FREECAD_MCP_INTEGRATION=1 FREECAD_MCP_FEM=1 uv run pytest -q -s tests/integration
 FREECAD_MCP_INTEGRATION=1 FREECAD_MCP_CAM=1 uv run pytest -q -s tests/integration
 FREECAD_MCP_INTEGRATION=1 FREECAD_MCP_RESOURCES=1 uv run pytest -q -s tests/integration
+FREECAD_MCP_INTEGRATION=1 FREECAD_MCP_RESOURCES=1 FREECAD_MCP_FCGEAR=1 uv run pytest -q -s tests/integration
 ```
 
 It checks the actual MCP protocol, document lifecycle and dirty-state guards,

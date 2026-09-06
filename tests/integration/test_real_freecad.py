@@ -4,6 +4,7 @@ FREECAD_MCP_INTEGRATION=1 uv run pytest -q -s tests/integration
 Set FREECAD_MCP_FEM=1 to also require installed Gmsh and CalculiX.
 Set FREECAD_MCP_CAM=1 to also build, post, simulate and reopen a CAM Job.
 Set FREECAD_MCP_RESOURCES=1 to require Fasteners and FreeCAD Parts Library.
+Set FREECAD_MCP_FCGEAR=1 with RESOURCES to require the external FCGear provider.
 """
 
 import asyncio
@@ -280,10 +281,48 @@ async def exercise():
                         "document": resource_doc,
                     })
                     assert inserted_bearing["result"]["objects"]
+
+                    if os.environ.get("FREECAD_MCP_FCGEAR") == "1":
+                        assert "fcgear" in provider_ids, providers
+                        gears = await call("ResourceOperations", {
+                            "action": "search", "provider": "fcgear",
+                            "query": "external involute gear", "limit": 5,
+                        })
+                        assert gears["result"]["matches"][0]["id"] == (
+                            "fcgear:InvoluteGear"
+                        )
+                        gear_properties = {
+                            "module": 2, "num_teeth": 24, "height": 8,
+                            "helix_angle": "15 deg", "axle_hole": True,
+                            "axle_holesize": 8,
+                        }
+                        gear_info = await call("ResourceOperations", {
+                            "action": "inspect",
+                            "resource_id": "fcgear:InvoluteGear",
+                            "properties": gear_properties,
+                        })
+                        assert {"module", "num_teeth", "height"} <= set(
+                            gear_info["result"]["parameters"]
+                        )
+                        assert gear_info["result"]["shape"]["solids"] == 1
+                        inserted_gear = await call("ResourceOperations", {
+                            "action": "insert",
+                            "resource_id": "fcgear:InvoluteGear",
+                            "document": resource_doc, "properties": gear_properties,
+                        })
+                        gear = inserted_gear["result"]
+                        assert gear["properties"]["num_teeth"] == 24
+                        assert gear["computed"]["pitch_diameter"] == {
+                            "value": pytest.approx(48.0), "unit": "mm",
+                        }
+                        assert gear["shape"]["solids"] == 1
+                        print("REAL_FREECAD_FCGEAR_RESOURCE_PASS")
+
                     inspected_resources = await call("InspectDocument", {
                         "document": resource_doc,
                     })
-                    assert inspected_resources["result"]["document"]["object_count"] >= 2
+                    expected_objects = 5 if os.environ.get("FREECAD_MCP_FCGEAR") == "1" else 4
+                    assert inspected_resources["result"]["document"]["object_count"] >= expected_objects
                     print("REAL_FREECAD_RESOURCE_OPERATIONS_PASS")
 
                 # Assertions fail and are corrected in fresh native FreeCADCmds.
