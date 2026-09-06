@@ -6,12 +6,13 @@ and older addons expose a different interface.
 
 | Tool | Purpose |
 | --- | --- |
-| `document_operations(action, document=None, path=None, ...)` | List, create, open, activate, save, reload, or safely close live FreeCAD documents. |
-| `execute_python(code, timeout_seconds=90)` | Run Python in the live FreeCAD GUI, retaining variables between calls. |
-| `inspect_document(document=None, object_name=None, properties=None, max_depth=6)` | Read the native GUI tree or focused object dependencies and property values. |
-| `get_view(width=1024, height=768)` | Return the current 3D view as an MCP PNG image. |
-| `get_runtime_status()` | Read FreeCAD version and execution health, even while the GUI is busy. |
-| `test_python(code, document_path=None, timeout_seconds=60)` | Run assertions/scripts in a fresh FreeCADCmd process, optionally opening a saved document copy. |
+| `GetHelp(topic="start")` | Learn the Python-first workflow and focused guidance for documents, workbenches, FEM, CAM, validation, or blockers. |
+| `DocumentOperations(action, document=None, path=None, ...)` | List, create, open, activate, save, reload, or safely close live FreeCAD documents. |
+| `ExecutePython(code, timeout_seconds=90)` | Run Python in the live FreeCAD GUI, retaining variables between calls. |
+| `InspectDocument(document=None, object_name=None, properties=None, max_depth=6)` | Read the native GUI tree or focused object dependencies and property values. |
+| `GetView(width=1024, height=768)` | Return the current 3D view as an MCP PNG image. |
+| `GetRuntimeStatus()` | Read FreeCAD version and execution health, even while the GUI is busy. |
+| `TestPython(code, document_path=None, timeout_seconds=60)` | Run assertions/scripts in a fresh FreeCADCmd process, optionally opening a saved document copy. |
 
 Document lifecycle has one focused tool. Objects, sketches, libraries,
 imports/exports, assemblies, and FEM are handled by the native Python API.
@@ -43,11 +44,11 @@ Configure your MCP client to run this checkout with [uv](https://docs.astral.sh/
 
 Use `--host HOST` and optionally `--port PORT` for a different bridge address.
 This branch removes the old tool names and `--only-text-feedback` flag.
-Execution returns text; request images explicitly with `get_view`.
+Execution returns text; request images explicitly with `GetView`.
 
 ## Write, inspect, correct
 
-Use `document_operations` for file lifecycle instead of repeating boilerplate
+Use `DocumentOperations` for file lifecycle instead of repeating boilerplate
 Python. Its actions are `list`, `new`, `open`, `activate`, `save`, `save_as`,
 `reload`, and `close`. It reports FreeCAD's actual internal document name,
 label, path, active/modified state, and object count. `open` and `save_as` use
@@ -55,7 +56,7 @@ label, path, active/modified state, and object count. `open` and `save_as` use
 unless `overwrite=true`; `reload` and `close` refuse to discard modified state
 unless `discard_changes=true`.
 
-Call `inspect_document` without `object_name` for a compact hierarchy built from
+Call `InspectDocument` without `object_name` for a compact hierarchy built from
 FreeCAD's native GUI providers. Hidden objects and actionable state are marked;
 routine `Up-to-date` state is omitted. Set `object_name` to an internal name for
 its parents, children, dependencies, dependents, and visible property names.
@@ -64,7 +65,7 @@ preferred unit, placements become vectors/quaternions, links become object
 names, and shapes become bounded volume/size summaries rather than serialized
 geometry.
 
-Submit a cell to `execute_python`:
+Submit a cell to `ExecutePython`:
 
 ```python
 doc = App.newDocument("Demo")
@@ -108,7 +109,7 @@ states. A changed session ID means live variables were reset. Busy/stuck status
 adds elapsed time. Routine results omit opaque IDs, timings, empty fields and
 default flags; internal source history is retained for cross-cell tracebacks.
 
-For visual verification, set the camera in Python and then call `get_view`:
+For visual verification, set the camera in Python and then call `GetView`:
 
 ```python
 Gui.activeDocument().activeView().viewIsometric()
@@ -126,7 +127,7 @@ explain the App/Gui distinction. A complete Python FEM example is in
 Live cells run on FreeCAD's GUI thread. `timeout_seconds` accepts 1–3600 seconds;
 it limits the wait and cannot terminate an operation that has already started.
 A timed-out running cell marks dispatch as stuck and later GUI calls fail
-immediately until it finishes. Check `get_runtime_status` before retrying.
+immediately until it finishes. Check `GetRuntimeStatus` before retrying.
 If execution never finishes, restart FreeCAD manually. Python has the same
 filesystem and process privileges as FreeCAD; it is not a security sandbox.
 Python remains available while menus or non-blocking modal dialogs are open,
@@ -135,7 +136,7 @@ calling a blocking `dialog.exec()` inside a cell keeps that cell running and
 prevents another live cell from entering until it returns. Avoid editing the
 same document manually while a model is modifying it.
 
-Use `test_python` to check a complete script before applying it to the live
+Use `TestPython` to check a complete script before applying it to the live
 document. Every test starts a new FreeCADCmd on the FreeCAD host with its own
 profile and temporary workspace. The worker must match the live FreeCAD
 version and build. `App`/`FreeCAD` are preloaded; live variables and `Gui` are
@@ -155,7 +156,7 @@ network access; this isolates FreeCAD state, not untrusted code.
 FreeCADCmd is located beside the running FreeCAD installation. For layouts
 where it is elsewhere, set `FREECAD_MCP_FREECADCMD` to its executable path
 **before launching FreeCAD**. This setting belongs to the addon host, including
-when the MCP client connects remotely. `get_runtime_status` reports availability
+when the MCP client connects remotely. `GetRuntimeStatus` reports availability
 and whether a test is running. GUI workbenches and views still need live testing.
 
 Run unit tests with `uv run pytest -q`. The integration test is opt-in and must

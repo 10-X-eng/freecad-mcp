@@ -37,8 +37,8 @@ async def exercise():
             await session.initialize()
             tools = await session.list_tools()
             assert [tool.name for tool in tools.tools] == [
-                "document_operations", "execute_python", "inspect_document", "get_view",
-                "get_runtime_status", "test_python",
+                "GetHelp", "DocumentOperations", "ExecutePython", "InspectDocument",
+                "GetView", "GetRuntimeStatus", "TestPython",
             ]
 
             async def call(name, args=None, success=True):
@@ -50,12 +50,12 @@ async def exercise():
                 return json.loads(text) if text else result
 
             async def run(code, success=True, timeout=90):
-                result = await call("execute_python", {
+                result = await call("ExecutePython", {
                     "code": code, "timeout_seconds": timeout,
                 }, success)
                 return result
 
-            status = await call("get_runtime_status")
+            status = await call("GetRuntimeStatus")
             assert status["freecad_version"] == "1.1.3", status
             assert status["test_worker"]["state"] == "ready", status
             print("REAL FreeCAD version:", status["freecad_version"])
@@ -63,7 +63,7 @@ async def exercise():
             # The production document tool owns lifecycle and protects live edits.
             with tempfile.TemporaryDirectory(prefix="freecad_mcp_documents_") as directory:
                 document_path = str(Path(directory) / "lifecycle.FCStd")
-                created = await call("document_operations", {
+                created = await call("DocumentOperations", {
                     "action": "new", "document": "MCP Document Lifecycle",
                 })
                 lifecycle_name = created["result"]["name"]
@@ -72,13 +72,13 @@ async def exercise():
                     "lifecycle_box = lifecycle_doc.addObject('Part::Box', 'Box')\n"
                     "lifecycle_box.Length = 10\nlifecycle_doc.recompute()"
                 )
-                inspected = await call("inspect_document", {"document": lifecycle_name})
+                inspected = await call("InspectDocument", {"document": lifecycle_name})
                 assert inspected["result"]["document"]["modified"] is True
                 assert inspected["result"]["document"]["object_count"] == 1
                 assert inspected["result"]["tree"] == [{
                     "name": "Box", "type": "Part::Box",
                 }]
-                box_detail = await call("inspect_document", {
+                box_detail = await call("InspectDocument", {
                     "document": lifecycle_name, "object_name": "Box",
                     "properties": ["Length", "Shape"],
                 })
@@ -89,22 +89,22 @@ async def exercise():
                 assert shape["solids"] == 1
                 assert shape["volume"] == pytest.approx(1000.0)
                 print("REAL_FREECAD_DOCUMENT_INSPECTION_PASS")
-                saved = await call("document_operations", {
+                saved = await call("DocumentOperations", {
                     "action": "save_as", "document": lifecycle_name,
                     "path": document_path,
                 })
                 assert saved["result"]["path"] == document_path
-                listed = await call("document_operations", {"action": "list"})
+                listed = await call("DocumentOperations", {"action": "list"})
                 assert any(
                     item["name"] == lifecycle_name and item["path"] == document_path
                     for item in listed["result"]["documents"]
                 )
                 await run("lifecycle_box.Length = 99\nlifecycle_doc.recompute()")
-                protected = await call("document_operations", {
+                protected = await call("DocumentOperations", {
                     "action": "reload", "document": lifecycle_name,
                 }, False)
                 assert "unsaved changes" in protected["error"]
-                reloaded = await call("document_operations", {
+                reloaded = await call("DocumentOperations", {
                     "action": "reload", "document": lifecycle_name,
                     "discard_changes": True,
                 })
@@ -114,13 +114,13 @@ async def exercise():
                     "assert lifecycle_box.Length.Value == 10\n"
                     "lifecycle_box.Width = 12\nlifecycle_doc.recompute()"
                 )
-                await call("document_operations", {
+                await call("DocumentOperations", {
                     "action": "save", "document": lifecycle_name,
                 })
-                await call("document_operations", {
+                await call("DocumentOperations", {
                     "action": "close", "document": lifecycle_name,
                 })
-                opened = await call("document_operations", {
+                opened = await call("DocumentOperations", {
                     "action": "open", "path": document_path,
                 })
                 reopened_name = opened["result"]["name"]
@@ -128,10 +128,10 @@ async def exercise():
                     f"reopened = App.getDocument({reopened_name!r})\n"
                     "assert reopened.getObject('Box').Width.Value == 12"
                 )
-                await call("document_operations", {
+                await call("DocumentOperations", {
                     "action": "activate", "document": reopened_name,
                 })
-                await call("document_operations", {
+                await call("DocumentOperations", {
                     "action": "close", "document": reopened_name,
                 })
                 print("REAL_FREECAD_DOCUMENT_OPERATIONS_PASS")
@@ -200,7 +200,7 @@ async def exercise():
                     "Gui.activeDocument().activeView().viewIsometric()\n"
                     "Gui.activeDocument().activeView().fitAll()"
                 )
-                image_result = await call("get_view", {"width": 320, "height": 240})
+                image_result = await call("GetView", {"width": 320, "height": 240})
                 image = next(block for block in image_result.content if block.type == "image")
                 data = base64.b64decode(image.data)
                 assert data[:8] == b"\x89PNG\r\n\x1a\n"
@@ -228,12 +228,12 @@ async def exercise():
                 )
 
                 # Assertions fail and are corrected in fresh native FreeCADCmds.
-                failed_test = await call("test_python", {"code": (
+                failed_test = await call("TestPython", {"code": (
                     "import Part\nshape = Part.makeBox(2, 3, 4)\n"
                     "assert shape.Volume == 25, 'wrong volume'"
                 )}, False)
                 assert "AssertionError" in failed_test["error"]
-                tested = await call("test_python", {"code": (
+                tested = await call("TestPython", {"code": (
                     "import Part, math\nshape = Part.makeBox(2, 3, 4)\n"
                     "assert math.isclose(shape.Volume, 24)\n"
                     "assert App.GuiUp == 0\nassert 'Gui' not in globals()\n"
@@ -250,7 +250,7 @@ async def exercise():
                     "original_hash = hashlib.sha256(Path(model_path).read_bytes()).hexdigest()\n"
                     "box.Width = 16\ndoc.recompute()\nmodel_path"
                 )
-                copied = await call("test_python", {
+                copied = await call("TestPython", {
                     "document_path": source["result"],
                     "code": (
                         "assert doc.getObject('Box').Width.Value == 15\n"
@@ -268,25 +268,25 @@ async def exercise():
 
                 # An infinite loop is killed in the disposable process. Live calls
                 # and status still complete through the very same MCP connection.
-                hanging_test = asyncio.create_task(call("test_python", {
+                hanging_test = asyncio.create_task(call("TestPython", {
                     "code": "print('worker entered', flush=True)\nwhile True: pass",
                     "timeout_seconds": 2,
                 }, False))
                 for _ in range(40):
-                    test_status = await call("get_runtime_status")
+                    test_status = await call("GetRuntimeStatus")
                     if test_status["test_worker"]["state"] == "running":
                         break
                     await asyncio.sleep(0.03)
                 assert test_status["test_worker"]["state"] == "running"
                 assert (await run("box.Length.Value"))["result"] == 40
-                busy = await call("test_python", {"code": "42"}, False)
+                busy = await call("TestPython", {"code": "42"}, False)
                 assert busy["code"] == "TEST_WORKER_BUSY"
                 killed = await hanging_test
                 assert killed["code"] == "TEST_TIMEOUT"
                 assert "worker entered" in killed["process_stdout"]
-                crashed = await call("test_python", {"code": "import os\nos._exit(7)"}, False)
+                crashed = await call("TestPython", {"code": "import os\nos._exit(7)"}, False)
                 assert crashed["code"] == "TEST_WORKER_EXITED" and crashed["exit_code"] == 7
-                assert (await call("test_python", {"code": "6 * 7"}))["result"] == 42
+                assert (await call("TestPython", {"code": "6 * 7"}))["result"] == 42
                 print("REAL_FREECAD_ISOLATED_TESTS_PASS")
 
                 if os.environ.get("FREECAD_MCP_FEM") == "1":
@@ -300,7 +300,7 @@ async def exercise():
                         "        App.ParamGet('User parameter:BaseApp/Preferences/Mod/Fem/' + group).SetString(key, path)"
                     )
                     fem_code = (REPO / "examples/cantilever_fem.py").read_text()
-                    tested_fem = await call("test_python", {
+                    tested_fem = await call("TestPython", {
                         "code": fem_setup + "\n" + fem_code, "timeout_seconds": 600,
                     })
                     print("REAL headless FEM:", tested_fem["result"])
@@ -312,7 +312,7 @@ async def exercise():
                 # Both calls share one MCP session; status must bypass busy Python.
                 long_call = asyncio.create_task(run("import time\ntime.sleep(3)\n42", False, 1))
                 for _ in range(30):
-                    status = await call("get_runtime_status")
+                    status = await call("GetRuntimeStatus")
                     if status["gui"]["state"] == "busy":
                         break
                     await asyncio.sleep(0.03)
@@ -320,13 +320,13 @@ async def exercise():
                     raise AssertionError("Status did not respond while Python was running")
                 timed_out = await long_call
                 assert timed_out["code"] == "GUI_DISPATCH_STUCK"
-                stuck = await call("get_runtime_status")
+                stuck = await call("GetRuntimeStatus")
                 assert stuck["gui"]["state"] == "stuck"
                 assert stuck["gui"]["operation"] == "execute_python"
                 rejected = await run("raise AssertionError('must never run')", False)
                 assert rejected["code"] == "GUI_DISPATCH_STUCK"
                 for _ in range(100):
-                    if (await call("get_runtime_status"))["gui"]["state"] == "idle":
+                    if (await call("GetRuntimeStatus"))["gui"]["state"] == "idle":
                         break
                     await asyncio.sleep(0.05)
                 assert (await run("6 * 7"))["result"] == 42
@@ -339,7 +339,7 @@ async def exercise():
                     "        App.closeDocument(name)\n"
                     "integration_temp.cleanup()"
                 )
-            no_view = await call("get_view", success=False)
+            no_view = await call("GetView", success=False)
             assert "active" in no_view["error"].lower()
             print("REAL_FREECAD_FOCUSED_MCP_PASS")
 

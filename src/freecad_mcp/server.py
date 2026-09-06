@@ -17,6 +17,7 @@ except ImportError:
     from mcp.server.mcpserver import MCPServer as FastMCP
 
 from .freecad_client import FreeCADConnection
+from .help_content import HelpTopic, get_help_content
 from .responses import execution_feedback, runtime_feedback
 from .server_state import ServerState
 
@@ -46,7 +47,23 @@ mcp = FastMCP(
     "FreeCADMCP",
     log_level="WARNING",
     lifespan=lifespan,
+    instructions=(
+        "Control FreeCAD with the exact tool names exposed by the client. Start with "
+        "GetHelp(topic='start'); never invent or rewrite a tool name. Use the returned "
+        "related topics as needed."
+    ),
 )
+
+
+@mcp.tool(name="GetHelp", structured_output=False)
+async def get_help(topic: HelpTopic = "start") -> CallToolResult:
+    """Get focused operating guidance. Start with topic=start. Other topics:
+    python, documents, workbenches, inspection, validation, fem, cam, blocked.
+    """
+    return CallToolResult(content=[TextContent(
+        type="text",
+        text=json.dumps(get_help_content(topic), ensure_ascii=False, separators=(",", ":")),
+    )])
 
 
 def json_result(data: dict, *, status=False) -> CallToolResult:
@@ -67,7 +84,7 @@ async def rpc_call(method, *args, status=False) -> CallToolResult:
         })
 
 
-@mcp.tool(structured_output=False)
+@mcp.tool(name="DocumentOperations", structured_output=False)
 async def document_operations(
     action: Literal["list", "new", "open", "activate", "save", "save_as", "reload", "close"],
     document: str | None = None,
@@ -86,7 +103,7 @@ async def document_operations(
     )
 
 
-@mcp.tool(structured_output=False)
+@mcp.tool(name="ExecutePython", structured_output=False)
 async def execute_python(
     code: Annotated[str, Field(max_length=100_000)],
     timeout_seconds: Annotated[int, Field(ge=1, le=3600)] = 90,
@@ -97,12 +114,12 @@ async def execute_python(
     expression or assign _result; _ holds the previous result. Use dir()/help()
     to explore the API and doc.recompute() after edits. Errors include source
     tracebacks but do not undo changes. Timeout stops waiting, not running
-    code: check get_runtime_status before retrying. Full host privileges.
+    code: check GetRuntimeStatus before retrying. Full host privileges.
     """
     return await rpc_call(connection().execute_python, code, timeout_seconds)
 
 
-@mcp.tool(structured_output=False)
+@mcp.tool(name="InspectDocument", structured_output=False)
 async def inspect_document(
     document: str | None = None,
     object_name: str | None = None,
@@ -120,13 +137,13 @@ async def inspect_document(
     )
 
 
-@mcp.tool(structured_output=False)
+@mcp.tool(name="GetView", structured_output=False)
 async def get_view(
     width: Annotated[int, Field(ge=1, le=4096)] = 1024,
     height: Annotated[int, Field(ge=1, le=4096)] = 768,
 ) -> CallToolResult:
     """Capture the current 3D view as PNG without changing camera or selection.
-    Orient/frame with execute_python first, for example:
+    Orient/frame with ExecutePython first, for example:
     Gui.activeDocument().activeView().viewIsometric()
     Gui.activeDocument().activeView().fitAll()
     """
@@ -140,7 +157,7 @@ async def get_view(
         })
 
 
-@mcp.tool(structured_output=False)
+@mcp.tool(name="GetRuntimeStatus", structured_output=False)
 async def get_runtime_status() -> CallToolResult:
     """Read FreeCAD version, session identity, GUI state and test-worker state.
     Responds while GUI Python is busy. If stuck, wait or restart FreeCAD;
@@ -149,7 +166,7 @@ async def get_runtime_status() -> CallToolResult:
     return await rpc_call(connection().get_runtime_status, status=True)
 
 
-@mcp.tool(structured_output=False)
+@mcp.tool(name="TestPython", structured_output=False)
 async def test_python(
     code: Annotated[str, Field(max_length=100_000)],
     document_path: str | None = None,
