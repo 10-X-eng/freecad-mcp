@@ -80,3 +80,29 @@ reported 44 passed, 1 skipped. The full opt-in suite passed against a separate
 real FreeCAD 1.1.3 GUI on port 9876, now including open-modal and open-popup
 inspection/closure through MCP. FEM was not rerun for this dispatch-only change;
 the earlier FEM results above remain the recorded baseline.
+
+## Compact MCP feedback (2026-09-06)
+
+Branch `refactor/concise-tool-feedback` keeps the same four tools and argument
+schemas. It projects the bridge's detailed results into model-facing values,
+nonempty output, source errors, and truncation notices. Backend diagnostic
+records remain unchanged. Status retains session identity and busy/stuck state;
+worker crashes/timeouts retain actionable errors and partial process output.
+
+Tool descriptions shrink from 842 words (including server instructions repeated
+per tool by the client) to 165. A simple success is exactly `{"result":42}`.
+There is no repeated server-wide instruction paragraph. Explicit null/false/zero
+results, native warnings, source lines from earlier cells, truncation and error
+codes are covered by tests.
+
+`uv run pytest -q`: 64 passed, 1 skipped. The full real FreeCAD 1.1.3 suite passed
+with `FREECAD_MCP_FEM=1` on port 9876, including fresh MCP startup, GUI dialogs,
+PNG capture, worker isolation, forced timeout/recovery, and Gmsh/CalculiX in both
+GUI and headless execution. Coarse FEM results were 198 nodes, 31.1080 MPa and
+0.114718 mm (headless), and 32.4225 MPa and 0.115814 mm (live). These are software
+smoke tests, not engineering sign-off. Source/wheel builds and diff checks passed.
+
+The desktop addon bridge was restarted without losing the live Python namespace
+or mounting-plate document. A live modal was closed through Python and the plate
+was edited from 8 to 10 mm afterward. Codex must restart to load the new MCP
+response formatter and tool descriptions.

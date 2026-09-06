@@ -15,6 +15,8 @@ def test_only_transport_and_execution_tools_are_registered():
         schema = tools[0].inputSchema
         assert schema["required"] == ["code"]
         assert schema["properties"]["timeout_seconds"]["maximum"] == 3600
+        assert sum(len(tool.description.split()) for tool in tools) <= 250
+        assert server.mcp.instructions is None
     asyncio.run(inspect())
 
 
@@ -37,7 +39,7 @@ def test_status_remains_responsive_through_same_mcp_server(monkeypatch):
         try:
             assert await asyncio.to_thread(entered.wait, 1)
             result = await asyncio.wait_for(server.get_runtime_status(), 1)
-            assert json.loads(result.content[0].text)["gui_dispatch"]["state"] == "busy"
+            assert json.loads(result.content[0].text)["gui"]["state"] == "busy"
         finally:
             release.set()
             await execution

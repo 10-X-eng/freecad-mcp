@@ -51,11 +51,11 @@ async def exercise():
                 result = await call("execute_python", {
                     "code": code, "timeout_seconds": timeout,
                 }, success)
-                assert result["success"] is success, result
                 return result
 
             status = await call("get_runtime_status")
-            assert status["freecad_version"][:3] == ["1", "1", "3"], status
+            assert status["freecad_version"] == "1.1.3", status
+            assert status["test_worker"]["state"] == "ready", status
             print("REAL FreeCAD version:", status["freecad_version"])
             await run(
                 "import tempfile, os, math, sys, Part, Sketcher\n"
@@ -69,8 +69,9 @@ async def exercise():
             try:
                 failed = await run("print('before assertion')\nassert box.Shape.Volume == 1", False)
                 assert failed["stdout"] == "before assertion\n"
-                assert "assert box.Shape.Volume == 1" in failed["error"]["traceback"]
-                assert failed["error"]["type"] == "AssertionError"
+                assert "assert box.Shape.Volume == 1" in failed["error"]
+                assert "AssertionError" in failed["error"]
+                assert "python_session.py" not in failed["error"]
                 fixed = await run(
                     "box.Length = 40\ndoc.recompute()\n"
                     "assert box.Shape.isValid()\n"
@@ -80,8 +81,8 @@ async def exercise():
                 output = await run("print('stdout')\nprint('stderr', file=sys.stderr)\n2**80")
                 assert output["stdout"] == "stdout\n" and output["stderr"] == "stderr\n"
                 assert output["result"] == 2**80
-                assert (await run("if", False))["error"]["type"] == "SyntaxError"
-                assert (await run("40 + 2"))["result"] == 42
+                assert "SyntaxError" in (await run("if", False))["error"]
+                assert await run("40 + 2") == {"result": 42}
 
                 # A menu/dialog must not block the Python needed to inspect or
                 # close it. Fallback timers prevent a regression stranding the UI.
@@ -152,17 +153,17 @@ async def exercise():
                     "import Part\nshape = Part.makeBox(2, 3, 4)\n"
                     "assert shape.Volume == 25, 'wrong volume'"
                 )}, False)
-                assert failed_test["error"]["type"] == "AssertionError"
+                assert "AssertionError" in failed_test["error"]
                 tested = await call("test_python", {"code": (
                     "import Part, math\nshape = Part.makeBox(2, 3, 4)\n"
                     "assert math.isclose(shape.Volume, 24)\n"
                     "assert App.GuiUp == 0\nassert 'Gui' not in globals()\n"
                     "assert 'integration_docs' not in globals()\n"
-                    "{'volume': shape.Volume, 'valid': shape.isValid()}"
+                    "{'volume': shape.Volume, 'valid': shape.isValid(), 'version': '.'.join(App.Version()[:3])}"
                 )})
                 assert tested["result"]["valid"]
-                assert tested["freecad_version"] == status["freecad_version"]
-                assert tested["exit_code"] == 0 and tested["workspace_removed"]
+                assert tested["result"]["version"] == status["freecad_version"]
+                assert set(tested) == {"result"}, tested
 
                 # A saved copy excludes unsaved live edits and cannot replace the source.
                 source = await run(
@@ -194,16 +195,15 @@ async def exercise():
                 }, False))
                 for _ in range(40):
                     test_status = await call("get_runtime_status")
-                    if test_status["test_worker"]["current_test"]:
+                    if test_status["test_worker"]["state"] == "running":
                         break
                     await asyncio.sleep(0.03)
-                assert test_status["test_worker"]["current_test"]
+                assert test_status["test_worker"]["state"] == "running"
                 assert (await run("box.Length.Value"))["result"] == 40
                 busy = await call("test_python", {"code": "42"}, False)
                 assert busy["code"] == "TEST_WORKER_BUSY"
                 killed = await hanging_test
-                assert killed["code"] == "TEST_TIMEOUT" and killed["timed_out"]
-                assert killed["workspace_removed"]
+                assert killed["code"] == "TEST_TIMEOUT"
                 assert "worker entered" in killed["process_stdout"]
                 crashed = await call("test_python", {"code": "import os\nos._exit(7)"}, False)
                 assert crashed["code"] == "TEST_WORKER_EXITED" and crashed["exit_code"] == 7
@@ -234,7 +234,7 @@ async def exercise():
                 long_call = asyncio.create_task(run("import time\ntime.sleep(3)\n42", False, 1))
                 for _ in range(30):
                     status = await call("get_runtime_status")
-                    if status["gui_dispatch"]["state"] == "busy":
+                    if status["gui"]["state"] == "busy":
                         break
                     await asyncio.sleep(0.03)
                 else:
@@ -242,11 +242,12 @@ async def exercise():
                 timed_out = await long_call
                 assert timed_out["code"] == "GUI_DISPATCH_STUCK"
                 stuck = await call("get_runtime_status")
-                assert stuck["current_cell"]["cell_id"] == timed_out["cell_id"]
+                assert stuck["gui"]["state"] == "stuck"
+                assert stuck["gui"]["operation"] == "execute_python"
                 rejected = await run("raise AssertionError('must never run')", False)
                 assert rejected["code"] == "GUI_DISPATCH_STUCK"
                 for _ in range(100):
-                    if (await call("get_runtime_status"))["gui_dispatch"]["state"] == "healthy":
+                    if (await call("get_runtime_status"))["gui"]["state"] == "idle":
                         break
                     await asyncio.sleep(0.05)
                 assert (await run("6 * 7"))["result"] == 42
@@ -260,7 +261,7 @@ async def exercise():
                     "integration_temp.cleanup()"
                 )
             no_view = await call("get_view", success=False)
-            assert "active" in no_view["error"]["message"].lower()
+            assert "active" in no_view["error"].lower()
             print("REAL_FREECAD_FOCUSED_MCP_PASS")
 
 

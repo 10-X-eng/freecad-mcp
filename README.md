@@ -71,18 +71,22 @@ You can also assign `_result` explicitly in a cell that ends in a statement.
 `Gui`/`FreeCADGui` are restored before every cell. Use `import Part`,
 `import Sketcher`, `import Draft`, or other workbench modules as needed.
 
-Results include cell/session IDs, stdout/stderr, duration, and exception
-tracebacks with submitted source lines. Failed executions set MCP `isError`.
+Results contain only the returned value and non-empty stdout/stderr. A cell
+with neither returns `{"ok":true}`. Exceptions return a source traceback in
+`error` and set MCP `isError`; transport failures include an error message.
 Python exceptions do not undo changes already made; inspect the document
 before retrying. Restarting FreeCAD clears the namespace.
 
 Lists, dictionaries and scalars return as JSON. Other values return type/repr;
 select the properties you need explicitly. Output/result sizes and source
-history are bounded; truncation is reported. Python stdout/stderr are captured;
+history are bounded; a `truncated` list identifies shortened output fields.
+Python stdout/stderr are captured;
 native FreeCAD console diagnostics may still appear only in Report View.
 
-Runtime status returns recent cell IDs and outcomes; source is retained in a
-bounded history for tracebacks, rather than repeating scripts on every poll.
+Runtime status returns the FreeCAD version, session identity, and GUI/test-worker
+states. A changed session ID means live variables were reset. Busy/stuck status
+adds elapsed time. Routine results omit opaque IDs, timings, empty fields and
+default flags; internal source history is retained for cross-cell tracebacks.
 
 For visual verification, set the camera in Python and then call `get_view`:
 
@@ -119,9 +123,10 @@ unavailable. When `document_path` is supplied, it must be an absolute `.FCStd`
 path on that host; the temporary copy is opened as `doc`. It includes saved
 state only. Linked external files are not copied.
 
-The worker returns result, stdout/stderr, exception traceback, process logs,
-exit status and whether it timed out. Output printed before a timeout remains
-available in the process logs. The worker is terminated on timeout and its
+The worker uses the same compact result format. Native diagnostics are retained,
+but the startup banner and exact duplicate Python output are removed. Failures
+include error codes; abnormal exits include the exit code. Output printed before
+a timeout remains in the process logs. The worker is terminated on timeout and its
 temporary workspace is removed. One test runs at a time; live execution and
 runtime status remain available. Return values instead of temporary artifact
 paths. As with live execution, Python retains the host user's filesystem and
@@ -131,7 +136,7 @@ FreeCADCmd is located beside the running FreeCAD installation. For layouts
 where it is elsewhere, set `FREECAD_MCP_FREECADCMD` to its executable path
 **before launching FreeCAD**. This setting belongs to the addon host, including
 when the MCP client connects remotely. `get_runtime_status` reports availability
-and the current test. GUI workbenches and view behavior still need live testing.
+and whether a test is running. GUI workbenches and views still need live testing.
 
 Run unit tests with `uv run pytest -q`. The integration test is opt-in and must
 target a separate FreeCAD GUI/profile with this addon installed:
