@@ -11,6 +11,7 @@ HelpTopic = Literal[
     "resources",
     "inspection",
     "validation",
+    "bim",
     "fem",
     "cam",
     "blocked",
@@ -24,7 +25,7 @@ _HELP: dict[str, dict] = {
             "Use DocumentOperations for .FCStd lifecycle, ResourceOperations for installed components, InspectDocument for the native tree, GetView for visual evidence, and TestPython for isolated assertions.",
             "Call GetHelp again for the task topic before guessing API names.",
         ],
-        "related": ["python", "documents", "workbenches", "resources", "validation", "blocked"],
+        "related": ["python", "documents", "workbenches", "resources", "validation", "bim", "blocked"],
     },
     "python": {
         "guidance": [
@@ -52,7 +53,7 @@ _HELP: dict[str, dict] = {
             "Use module.__file__, dir(), help(), and inspect.signature() against the running installation because workbench APIs vary by FreeCAD version.",
             "GUI-only dialogs, hardware, and external solvers still require explicit acceptance tests.",
         ],
-        "related": ["python", "resources", "validation", "fem", "cam", "blocked"],
+        "related": ["python", "resources", "validation", "bim", "fem", "cam", "blocked"],
     },
     "resources": {
         "guidance": [
@@ -81,7 +82,19 @@ _HELP: dict[str, dict] = {
             "TestPython is a fresh FreeCADCmd process: it has App and the live profile's unit settings but no Gui or live variables; document_path contains only saved state.",
             "Do not claim a workbench works from imports alone. Exercise a real operation and verify its native outputs.",
         ],
-        "related": ["inspection", "fem", "cam", "blocked"],
+        "related": ["inspection", "bim", "fem", "cam", "blocked"],
+    },
+    "bim": {
+        "guidance": [
+            "Use ExecutePython with installed Arch/BIM APIs. Discover signatures live; IFC export is available from BIM.importers import exportIFC in FreeCAD 1.1.",
+            "Build and inspect the spatial chain Project > Site > Building > Building Storey. Do not assume makeBuildingPart creates a storey: verify IfcType and the exported IfcBuildingStorey entity.",
+            "Only the spatial site object should be IfcType='Site'. Classify terrain geometry as Building Element Proxy or another valid non-spatial type; duplicate Site classifications can break export.",
+            "Inspect property types before assignment. For enumerations use obj.getEnumerationsOfProperty(name); use a distinct App::PropertyString for free text. App::PropertyPercent requires an integer.",
+            "Use native Arch Pipe and Equipment for MEP geometry and add explicit system, circuit, endpoint, diameter, slope, and load metadata. Specialized workbenches such as Cables must be detected and acceptance-tested before using their objects.",
+            "Save, export the project, then use TestPython to reopen the FCStd and ifcopenshell to assert IFC schema, spatial decomposition, classes, counts, and valid geometry.",
+            "Treat generated BIM/MEP as a coordination model unless codes, calculations, and professional review are supplied and verified.",
+        ],
+        "related": ["python", "workbenches", "documents", "inspection", "validation", "blocked"],
     },
     "fem": {
         "guidance": [

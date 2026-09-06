@@ -18,7 +18,7 @@ def test_focused_python_and_document_tools_are_registered():
         help_schema = tools[0].inputSchema
         assert help_schema["properties"]["topic"]["enum"] == [
             "start", "python", "documents", "workbenches", "resources",
-            "inspection", "validation", "fem", "cam", "blocked",
+            "inspection", "validation", "bim", "fem", "cam", "blocked",
         ]
         document_schema = tools[1].inputSchema
         assert document_schema["required"] == ["action"]

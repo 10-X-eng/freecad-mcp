@@ -58,7 +58,7 @@ mcp = FastMCP(
 @mcp.tool(name="GetHelp", structured_output=False)
 async def get_help(topic: HelpTopic = "start") -> CallToolResult:
     """Get focused operating guidance. Start with topic=start. Other topics:
-    python, documents, workbenches, resources, inspection, validation, fem, cam, blocked.
+    python, documents, workbenches, resources, inspection, validation, bim, fem, cam, blocked.
     """
     content = get_help_content(topic)
     try:

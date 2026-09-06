@@ -30,7 +30,7 @@ The original conversation is available in the
 
 | Tool | Purpose |
 | --- | --- |
-| `GetHelp(topic="start")` | Learn the Python-first workflow and focused guidance for documents, workbenches, resources, FEM, CAM, validation, or blockers. |
+| `GetHelp(topic="start")` | Learn the Python-first workflow and focused guidance for documents, workbenches, resources, BIM, FEM, CAM, validation, or blockers. |
 | `DocumentOperations(action, document=None, path=None, ...)` | List, create, open, activate, save, reload, or safely close live FreeCAD documents. |
 | `ExecutePython(code, timeout_seconds=90)` | Run Python in the live FreeCAD GUI, retaining variables between calls. |
 | `InspectDocument(document=None, object_name=None, properties=None, max_depth=6)` | Read the native GUI tree or focused object dependencies and property values. |
