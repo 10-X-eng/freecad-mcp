@@ -1,3 +1,4 @@
+import json
 import logging
 import xmlrpc.client
 from typing import Any
@@ -48,6 +49,15 @@ class FreeCADConnection:
 
     def get_rpc_status(self) -> dict[str, Any]:
         return self.server.get_rpc_status()
+
+    def get_runtime_status(self) -> dict[str, Any]:
+        # A separate connection can report health while another call is blocked.
+        with self._make_proxy(10) as proxy:
+            return proxy.get_runtime_status()
+
+    def execute_python(self, code: str, timeout_seconds: int = 90) -> dict[str, Any]:
+        with self._make_proxy(timeout_seconds + 30) as proxy:
+            return json.loads(proxy.execute_python(code, timeout_seconds))
 
     def create_document(self, name: str) -> dict[str, Any]:
         return self.server.create_document(name)

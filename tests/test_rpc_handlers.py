@@ -1,6 +1,7 @@
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 import importlib.util
+import json
 from pathlib import Path
 import sys
 import threading
@@ -86,6 +87,42 @@ def test_script_names_cannot_replace_rpc_internals(rpc_module: types.ModuleType)
     assert result["success"] is True
     assert result["message"].endswith("42\n")
     assert rpc.get_object("Doc", "Box") == {"Name": "Box"}
+
+
+def test_python_cells_run_through_real_dispatch_and_xmlrpc(rpc_module):
+    rpc = rpc_module.FreeCADRPC()
+    with running_server(rpc) as (host, port), client(host, port, 5) as proxy:
+        assert json.loads(proxy.execute_python("answer = 2**80"))["success"]
+        result = json.loads(proxy.execute_python("{'answer': answer}"))
+        assert result["result"] == {"answer": 2**80}
+        failed = json.loads(proxy.execute_python("assert answer == 0"))
+        assert failed["error"]["type"] == "AssertionError"
+        assert "assert answer == 0" in failed["error"]["traceback"]
+
+
+def test_python_status_responds_while_cell_runs(rpc_module):
+    rpc = rpc_module.FreeCADRPC()
+    rpc_module.FreeCAD.Version = lambda: ["1", "1", "3"]
+    entered, release = threading.Event(), threading.Event()
+    rpc_module.FreeCAD.test_entered = entered
+    rpc_module.FreeCAD.test_release = release
+    with running_server(rpc) as (host, port), ThreadPoolExecutor(max_workers=2) as workers:
+        def request(method, *args):
+            with client(host, port, 5) as proxy:
+                return getattr(proxy, method)(*args)
+        execution = workers.submit(
+            request, "execute_python",
+            "App.test_entered.set()\nApp.test_release.wait(5)", 1,
+        )
+        try:
+            assert entered.wait(2)
+            status = request("get_runtime_status")
+            assert status["current_cell"]["cell_id"]
+            assert status["gui_dispatch"]["state"] == "busy"
+            assert json.loads(execution.result(timeout=2))["code"] == "GUI_DISPATCH_STUCK"
+            assert request("get_runtime_status")["gui_dispatch"]["state"] == "stuck"
+        finally:
+            release.set()
 
 
 def test_async_scripts_share_variables_without_replacing_dispatch(

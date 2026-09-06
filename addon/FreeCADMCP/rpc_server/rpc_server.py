@@ -4,9 +4,11 @@ import FreeCADGui
 import contextlib
 import base64
 import io
+import json
 import os
 import tempfile
 import threading
+import uuid
 from collections.abc import Callable
 from typing import Any
 from xmlrpc.client import Fault
@@ -27,6 +29,7 @@ from rpc_server.ip_filter import FilteredXMLRPCServer, validate_allowed_ips
 from rpc_server.object_factory import create_object_gui, edit_object_gui
 from rpc_server.parts_library import get_parts_list, insert_part_from_library
 from rpc_server.property_mapper import Object
+from rpc_server.python_session import PythonSession, MAX_CODE_CHARS
 from rpc_server.serialize import serialize_object
 from rpc_server.settings import load_settings, save_settings
 from rpc_server.view_manager import save_active_screenshot
@@ -45,6 +48,7 @@ _EXEC_NAMESPACE: dict[str, Any] = {
     "FreeCADGui": FreeCADGui,
     "Gui": FreeCADGui,
 }
+_python_session = PythonSession(_EXEC_NAMESPACE)
 
 
 def _ok(res) -> bool:
@@ -86,6 +90,32 @@ class FreeCADRPC:
             "rpc_server": "running",
             "gui_dispatch": get_dispatch_status(),
         }
+
+    def get_runtime_status(self) -> dict[str, Any]:
+        """Read execution state without queueing anything on the GUI thread."""
+        return {
+            **self.get_rpc_status(),
+            "freecad_version": list(FreeCAD.Version()),
+            **_python_session.status(),
+        }
+
+    def execute_python(self, code: str, timeout_seconds: int = 90) -> str:
+        """Run a Python cell and encode its result as JSON across XML-RPC."""
+        if not isinstance(code, str) or len(code) > MAX_CODE_CHARS:
+            raise ValueError(f"code must be a string of at most {MAX_CODE_CHARS} characters")
+        if type(timeout_seconds) is not int or not 1 <= timeout_seconds <= 3600:
+            raise ValueError("timeout_seconds must be an integer between 1 and 3600")
+        cell_id = uuid.uuid4().hex
+        response = dispatch_to_gui(
+            lambda: _python_session.run(code, cell_id),
+            timeout=timeout_seconds,
+            operation_name=f"execute_python:{cell_id}",
+        )
+        if not isinstance(response, dict):
+            response = {"success": False, "error": str(response)}
+        response.setdefault("cell_id", cell_id)
+        response.setdefault("session_id", _python_session.session_id)
+        return json.dumps(response, ensure_ascii=False, allow_nan=False)
 
     def create_document(self, name="New_Document"):
         # The GUI handler reports the document's ACTUAL name — FreeCAD
