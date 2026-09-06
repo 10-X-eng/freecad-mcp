@@ -47,7 +47,9 @@ the native Python API. There are no separate modeling tools.
 
 FreeCAD 1.1.3 is the tested configuration. FreeCAD addon directories include:
 
-- Windows: `%APPDATA%\FreeCAD\Mod\`
+- Windows:
+  - FreeCAD 1.1: `%APPDATA%\FreeCAD\v1-1\Mod\`
+  - Older/unversioned profiles: `%APPDATA%\FreeCAD\Mod\`
 - macOS:
   - FreeCAD 1.1: `~/Library/Application Support/FreeCAD/v1-1/Mod/`
   - FreeCAD 1.0: `~/Library/Application Support/FreeCAD/v1-0/Mod/`
@@ -87,6 +89,18 @@ mkdir -p ~/Library/Application\ Support/FreeCAD/v1-1/Mod/
 cp -r addon/FreeCADMCP ~/Library/Application\ Support/FreeCAD/v1-1/Mod/
 ```
 
+On Windows with FreeCAD 1.1, run the following in PowerShell from the checkout
+root after confirming the active profile with `App.getUserAppDataDir()`:
+
+```powershell
+$modPath = Join-Path $env:APPDATA 'FreeCAD\v1-1\Mod'
+New-Item -ItemType Directory -Path $modPath -Force | Out-Null
+Copy-Item -Recurse -Path .\addon\FreeCADMCP -Destination $modPath
+```
+
+If an older `FreeCADMCP` addon is already installed, move it outside the `Mod`
+directory before copying this checkout's addon. This avoids mixing addon versions.
+
 Restart FreeCAD after installing or updating the addon. Select **MCP Addon**
 from the workbench list:
 
@@ -123,6 +137,30 @@ the client at this checkout. For Claude Desktop, edit
 Use `--host HOST` and optionally `--port PORT` for a different bridge address.
 This fork removes the old tool names and `--only-text-feedback` flag.
 Execution returns text; request images explicitly with `GetView`.
+
+### Windows: Codex setup
+
+From the checkout root, install the locked dependencies with `uv sync --locked`.
+Add the following to `%USERPROFILE%\.codex\config.toml`, replacing the example
+checkout path with your own:
+
+```toml
+[mcp_servers.freecad]
+command = 'C:\path\to\freecad-mcp\.venv\Scripts\freecad-mcp.exe'
+args = ["--host", "127.0.0.1", "--port", "9875"]
+startup_timeout_sec = 30
+tool_timeout_sec = 3630
+```
+
+The executable's absolute path avoids depending on Codex inheriting your shell's
+`PATH`. The tool timeout accommodates the bridge's maximum 3600-second Python
+execution timeout. See the [official MCP configuration documentation](https://developers.openai.com/codex/mcp)
+for other client options.
+
+Keep FreeCAD open with its RPC server running, then restart Codex to load the
+new server entry. Call `GetRuntimeStatus` to verify the connection and FreeCAD
+version. If the connection is refused, check that **Start RPC Server** has been
+selected in FreeCAD, or enable **Auto-Start Server** for subsequent launches.
 
 ## Remote connections
 
@@ -344,7 +382,10 @@ Set `FREECAD_MCP_HOST`/`FREECAD_MCP_PORT` to target a different test bridge.
 The FEM test may configure bundled solver paths in that isolated profile.
 Set `FREECAD_MCP_IMAGE_PATH` to save its captured PNG for inspection. Live
 integration has been verified on Linux with the official FreeCAD 1.1.3 build;
-Windows and macOS have not been exercised here.
+Windows has also passed an MCP smoke test with FreeCAD 1.1.3 covering tool
+discovery, runtime status, document listing, live Python geometry assertions,
+and a disposable FreeCADCmd test. The full integration suite has not been run
+on Windows; macOS has not been exercised here.
 
 ## Contributors
 
