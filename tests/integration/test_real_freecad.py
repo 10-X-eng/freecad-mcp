@@ -2,6 +2,7 @@
 
 FREECAD_MCP_INTEGRATION=1 uv run pytest -q -s tests/integration
 Set FREECAD_MCP_FEM=1 to also require installed Gmsh and CalculiX.
+Set FREECAD_MCP_CAM=1 to also build, post, simulate and reopen a CAM Job.
 """
 
 import asyncio
@@ -308,6 +309,61 @@ async def exercise():
                     solved = await run(fem_code, timeout=600)
                     print("REAL FEM:", solved["result"])
                     assert solved["result"]["node_count"] > 0
+
+                if os.environ.get("FREECAD_MCP_CAM") == "1":
+                    cam_code = (REPO / "examples/fixture_plate_cam.py").read_text()
+                    tested_cam = await call("TestPython", {
+                        "code": (
+                            cam_code + "\ncam_built = build_fixture_plate_cam("
+                            "tempfile.mkdtemp(prefix='headless_cam_'), 'HeadlessCAM')\n"
+                            "cam_built['summary']"
+                        ),
+                        "timeout_seconds": 120,
+                    })
+                    assert tested_cam["result"]["tool_numbers"] == [1, 1, 2, 1]
+                    assert tested_cam["result"]["gcode_lines"] > 300
+                    print("REAL headless CAM:", tested_cam["result"])
+
+                    built_cam = await run(
+                        cam_code + "\ncam_built = build_fixture_plate_cam("
+                        "integration_temp.name, 'MCPFixturePlateCAM')\n"
+                        "integration_docs.append(cam_built['document'].Name)\n"
+                        "{'document': cam_built['document'].Name, "
+                        "'directory': integration_temp.name, **cam_built['summary']}",
+                        timeout=120,
+                    )
+                    assert built_cam["result"]["tool_numbers"] == [1, 1, 2, 1]
+                    simulated_cam = await run(
+                        "cam_simulated = simulate_fixture_plate_cam(cam_built)\n"
+                        "cam_simulated['summary']",
+                        timeout=180,
+                    )
+                    assert simulated_cam["result"]["commands"] > 200
+                    assert simulated_cam["result"]["volume_deviation_percent"] < 1
+                    cam_path = str(
+                        Path(built_cam["result"]["directory"]) / "fixture-plate-cam.FCStd"
+                    )
+                    await call("DocumentOperations", {
+                        "action": "save_as", "document": built_cam["result"]["document"],
+                        "path": cam_path,
+                    })
+                    persisted_cam = await call("TestPython", {
+                        "document_path": cam_path,
+                        "code": (
+                            "job = doc.getObject('CAMJob')\n"
+                            "ops = list(job.Operations.Group)\n"
+                            "assert [o.Name for o in ops] == ['Facing', 'Pocket', 'Drilling', 'Profile']\n"
+                            "assert [o.ToolController.ToolNumber for o in ops] == [1, 1, 2, 1]\n"
+                            "result = doc.getObject('CutMaterial')\n"
+                            "assert result.SimulationStatus == 'Completed'\n"
+                            "assert result.Mesh.CountFacets > 1000\n"
+                            "{'operations': {o.Name: len(o.Path.Commands) for o in ops}, "
+                            "'simulation_commands': result.SimulatedCommands}"
+                        ),
+                        "timeout_seconds": 120,
+                    })
+                    assert persisted_cam["result"]["simulation_commands"] > 200
+                    print("REAL CAM:", persisted_cam["result"])
 
                 # Both calls share one MCP session; status must bypass busy Python.
                 long_call = asyncio.create_task(run("import time\ntime.sleep(3)\n42", False, 1))

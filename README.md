@@ -227,7 +227,9 @@ Use `dir(App)`, `help(App.openDocument)`, `doc.supportedTypes()`,
 `obj.PropertiesList`, and `obj.getTypeIdOfProperty("Length")` to explore the
 installed API. The [official scripting basics](https://github.com/FreeCAD/FreeCAD-documentation/blob/main/wiki/FreeCAD_Scripting_Basics.md)
 explain the App/Gui distinction. A complete Python FEM example is in
-[examples/cantilever_fem.py](examples/cantilever_fem.py).
+[examples/cantilever_fem.py](examples/cantilever_fem.py). A complete native
+CAM Job with two tools, GRBL postprocessing and voxel material-removal
+simulation is in [examples/fixture_plate_cam.py](examples/fixture_plate_cam.py).
 
 ## Execution and testing
 
@@ -276,6 +278,7 @@ this checkout. Use a separate user config and profile when launching it.
 ```bash
 FREECAD_MCP_INTEGRATION=1 uv run pytest -q -s tests/integration
 FREECAD_MCP_INTEGRATION=1 FREECAD_MCP_FEM=1 uv run pytest -q -s tests/integration
+FREECAD_MCP_INTEGRATION=1 FREECAD_MCP_CAM=1 uv run pytest -q -s tests/integration
 ```
 
 It checks the actual MCP protocol, document lifecycle and dirty-state guards,
@@ -283,7 +286,10 @@ native tree/property inspection, geometry, failed assertions and corrected
 code, sketches/booleans, PNG capture, FCStd/STEP round trips, busy/stuck status
 and recovery. It also verifies disposable process assertions, source-document
 preservation, forced timeout, abnormal exit and successful retry. The second
-command also executes real Gmsh/CalculiX.
+command also executes real Gmsh/CalculiX. The third builds native facing,
+pocketing, drilling and profiling paths, posts GRBL G-code, completes the
+native voxel-removal simulation, saves the FCStd and reopens it in a fresh
+FreeCADCmd process.
 Set `FREECAD_MCP_HOST`/`FREECAD_MCP_PORT` to target a different test bridge.
 The FEM test may configure bundled solver paths in that isolated profile.
 Set `FREECAD_MCP_IMAGE_PATH` to save its captured PNG for inspection. Live
