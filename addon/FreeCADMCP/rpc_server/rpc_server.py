@@ -19,6 +19,7 @@ from rpc_server.gui_dispatch import (
 )
 from rpc_server.ip_filter import FilteredXMLRPCServer
 from rpc_server.python_session import PythonSession, MAX_CODE_CHARS
+from rpc_server.python_testing import PythonTestRunner, find_freecadcmd
 from rpc_server.settings import load_settings
 from rpc_server.view_manager import save_view
 
@@ -33,6 +34,11 @@ _python_session = PythonSession({
 
 
 class FreeCADRPC:
+    def __init__(self):
+        self._test_runner = PythonTestRunner(
+            find_freecadcmd(FreeCAD.getHomePath()), FreeCAD.Version(),
+        )
+
     def ping(self):
         return True
 
@@ -44,7 +50,15 @@ class FreeCADRPC:
             "gui_dispatch": get_dispatch_status(),
             "freecad_version": list(FreeCAD.Version()),
             **_python_session.status(),
+            "test_worker": self._test_runner.status(),
         }
+
+    def test_python(self, code, document_path=None, timeout_seconds=60) -> str:
+        # Run on this RPC request thread: no live GUI or document access.
+        return json.dumps(
+            self._test_runner.run(code, document_path, timeout_seconds),
+            ensure_ascii=False, allow_nan=False,
+        )
 
     def execute_python(self, code: str, timeout_seconds: int = 90) -> str:
         """Run a Python cell and encode its result as JSON across XML-RPC."""

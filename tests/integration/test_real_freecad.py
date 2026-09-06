@@ -36,7 +36,7 @@ async def exercise():
             await session.initialize()
             tools = await session.list_tools()
             assert [tool.name for tool in tools.tools] == [
-                "execute_python", "get_view", "get_runtime_status",
+                "execute_python", "get_view", "get_runtime_status", "test_python",
             ]
 
             async def call(name, args=None, success=True):
@@ -102,6 +102,8 @@ async def exercise():
                 assert data[:8] == b"\x89PNG\r\n\x1a\n"
                 assert struct.unpack(">II", data[16:24]) == (320, 240)
                 assert len(data) > 1000
+                if os.environ.get("FREECAD_MCP_IMAGE_PATH"):
+                    Path(os.environ["FREECAD_MCP_IMAGE_PATH"]).write_bytes(data)
 
                 await run(
                     "model_path = os.path.join(integration_temp.name, 'different-name.FCStd')\n"
@@ -121,16 +123,86 @@ async def exercise():
                     "App.setActiveDocument(doc.Name)"
                 )
 
+                # Assertions fail and are corrected in fresh native FreeCADCmds.
+                failed_test = await call("test_python", {"code": (
+                    "import Part\nshape = Part.makeBox(2, 3, 4)\n"
+                    "assert shape.Volume == 25, 'wrong volume'"
+                )}, False)
+                assert failed_test["error"]["type"] == "AssertionError"
+                tested = await call("test_python", {"code": (
+                    "import Part, math\nshape = Part.makeBox(2, 3, 4)\n"
+                    "assert math.isclose(shape.Volume, 24)\n"
+                    "assert App.GuiUp == 0\nassert 'Gui' not in globals()\n"
+                    "assert 'integration_docs' not in globals()\n"
+                    "{'volume': shape.Volume, 'valid': shape.isValid()}"
+                )})
+                assert tested["result"]["valid"]
+                assert tested["freecad_version"] == status["freecad_version"]
+                assert tested["exit_code"] == 0 and tested["workspace_removed"]
+
+                # A saved copy excludes unsaved live edits and cannot replace the source.
+                source = await run(
+                    "import hashlib\nfrom pathlib import Path\n"
+                    "original_hash = hashlib.sha256(Path(model_path).read_bytes()).hexdigest()\n"
+                    "box.Width = 16\ndoc.recompute()\nmodel_path"
+                )
+                copied = await call("test_python", {
+                    "document_path": source["result"],
+                    "code": (
+                        "assert doc.getObject('Box').Width.Value == 15\n"
+                        "doc.getObject('Box').Length = 7\ndoc.recompute()\ndoc.save()\n"
+                        "{'path': doc.FileName, 'width': doc.getObject('Box').Width.Value}"
+                    ),
+                })
+                assert copied["result"]["path"] != source["result"]
+                await run(
+                    "assert hashlib.sha256(Path(model_path).read_bytes()).hexdigest() == original_hash\n"
+                    "assert box.Length.Value == 40 and box.Width.Value == 16\n"
+                    f"assert not os.path.exists({copied['result']['path']!r})\n"
+                    "box.Width = 15\ndoc.recompute()"
+                )
+
+                # An infinite loop is killed in the disposable process. Live calls
+                # and status still complete through the very same MCP connection.
+                hanging_test = asyncio.create_task(call("test_python", {
+                    "code": "print('worker entered', flush=True)\nwhile True: pass",
+                    "timeout_seconds": 2,
+                }, False))
+                for _ in range(40):
+                    test_status = await call("get_runtime_status")
+                    if test_status["test_worker"]["current_test"]:
+                        break
+                    await asyncio.sleep(0.03)
+                assert test_status["test_worker"]["current_test"]
+                assert (await run("box.Length.Value"))["result"] == 40
+                busy = await call("test_python", {"code": "42"}, False)
+                assert busy["code"] == "TEST_WORKER_BUSY"
+                killed = await hanging_test
+                assert killed["code"] == "TEST_TIMEOUT" and killed["timed_out"]
+                assert killed["workspace_removed"]
+                assert "worker entered" in killed["process_stdout"]
+                crashed = await call("test_python", {"code": "import os\nos._exit(7)"}, False)
+                assert crashed["code"] == "TEST_WORKER_EXITED" and crashed["exit_code"] == 7
+                assert (await call("test_python", {"code": "6 * 7"}))["result"] == 42
+                print("REAL_FREECAD_ISOLATED_TESTS_PASS")
+
                 if os.environ.get("FREECAD_MCP_FEM") == "1":
                     # Use binaries bundled with the real installation when present.
-                    await run(
+                    fem_setup = (
+                        "import os\n"
                         "for group, key, binary in [('Gmsh', 'gmshBinaryPath', 'gmsh'), "
                         "('Ccx', 'ccxBinaryPath', 'ccx')]:\n"
                         "    path = os.path.join(App.getHomePath(), 'bin', binary)\n"
                         "    if os.path.isfile(path):\n"
                         "        App.ParamGet('User parameter:BaseApp/Preferences/Mod/Fem/' + group).SetString(key, path)"
                     )
-                    solved = await run((REPO / "examples/cantilever_fem.py").read_text(), timeout=600)
+                    fem_code = (REPO / "examples/cantilever_fem.py").read_text()
+                    tested_fem = await call("test_python", {
+                        "code": fem_setup + "\n" + fem_code, "timeout_seconds": 600,
+                    })
+                    print("REAL headless FEM:", tested_fem["result"])
+                    await run(fem_setup)
+                    solved = await run(fem_code, timeout=600)
                     print("REAL FEM:", solved["result"])
                     assert solved["result"]["node_count"] > 0
 
@@ -156,8 +228,8 @@ async def exercise():
                 assert (await run("6 * 7"))["result"] == 42
             finally:
                 await run(
-                    "if 'fem_doc' in globals() and fem_doc.Name in App.listDocuments():\n"
-                    "    App.closeDocument(fem_doc.Name)\n"
+                    "if 'fem_doc_name' in globals() and fem_doc_name in App.listDocuments():\n"
+                    "    App.closeDocument(fem_doc_name)\n"
                     "for name in integration_docs:\n"
                     "    if name in App.listDocuments():\n"
                     "        App.closeDocument(name)\n"

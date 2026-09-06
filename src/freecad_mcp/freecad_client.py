@@ -40,3 +40,8 @@ class FreeCADConnection:
 
     def get_view(self, width: int = 1024, height: int = 768) -> str:
         return self._call("get_view", width, height, timeout=90)
+
+    def test_python(self, code: str, document_path: str | None = None, timeout_seconds: int = 60) -> dict:
+        return json.loads(self._call(
+            "test_python", code, document_path, timeout_seconds, timeout=timeout_seconds + 30,
+        ))

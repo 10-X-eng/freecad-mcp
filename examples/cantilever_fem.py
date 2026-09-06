@@ -17,6 +17,7 @@ from femtools import ccxtools
 
 
 fem_doc = App.newDocument("MCPCantilever")
+fem_doc_name = fem_doc.Name
 beam = fem_doc.addObject("Part::Box", "Beam")
 beam.Length, beam.Width, beam.Height = 100, 10, 10
 fem_doc.recompute()
@@ -71,7 +72,11 @@ with tempfile.TemporaryDirectory(prefix="freecad_python_fem_") as solve_director
     prerequisites = fea.check_prerequisites()
     assert not prerequisites, prerequisites
     fea.purge_results()
-    assert fea.run() is not False, "CalculiX failed"
+    # run() resets the working directory from GUI preferences. Use the lower
+    # level sequence so all solver files stay in this temporary directory.
+    fea.write_inp_file()
+    assert fea.inp_file_name, "CalculiX input file was not written"
+    assert fea.ccx_run() == 0, "CalculiX failed"
     fea.load_results()
 
 results = next(obj for obj in analysis.Group if hasattr(obj, "vonMises"))

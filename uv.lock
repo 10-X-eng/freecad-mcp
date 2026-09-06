@@ -205,6 +205,7 @@ version = "0.1.22"
 source = { editable = "." }
 dependencies = [
     { name = "mcp", extra = ["cli"] },
+    { name = "pydantic" },
     { name = "validators" },
 ]
 
@@ -216,6 +217,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "mcp", extras = ["cli"], specifier = ">=1.23,<3" },
+    { name = "pydantic", specifier = ">=2.11,<3" },
     { name = "validators", specifier = ">=0.34.0" },
 ]
 

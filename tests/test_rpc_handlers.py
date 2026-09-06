@@ -23,6 +23,7 @@ def rpc_module(monkeypatch: pytest.MonkeyPatch) -> Iterator[types.ModuleType]:
     with load_gui_dispatch() as dispatch:
         freecad = dispatch.FreeCAD
         freecad.Version = lambda: ["1", "1", "3"]
+        freecad.getHomePath = lambda: "/missing-freecad-test-installation"
         freecad.Console.PrintMessage = lambda _message: None
         freecad.Console.PrintWarning = lambda _message: None
         stubs = {

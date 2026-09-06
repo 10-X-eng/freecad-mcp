@@ -28,11 +28,12 @@ MAX_HISTORY = 20
 class CapturedStream(io.StringIO):
     """Bound this cell's output and forward unrelated threads to the real stream."""
 
-    def __init__(self, original):
+    def __init__(self, original, tee=False):
         super().__init__()
         self.original = original
         self.owner = threading.get_ident()
         self.truncated = False
+        self.tee = tee
 
     def write(self, text):
         if threading.get_ident() != self.owner:
@@ -40,6 +41,9 @@ class CapturedStream(io.StringIO):
         remaining = max(0, MAX_OUTPUT_CHARS - self.tell())
         super().write(text[:remaining])
         self.truncated |= len(text) > remaining
+        if self.tee and remaining:
+            self.original.write(text[:remaining])
+            self.original.flush()
         return len(text)
 
     def flush(self):
@@ -105,13 +109,14 @@ def encode_result(value):
 
 
 class PythonSession:
-    def __init__(self, aliases):
+    def __init__(self, aliases, tee_output=False):
         self.session_id = uuid.uuid4().hex
         self.aliases = dict(aliases)
         self.namespace = {"__name__": "__main__", **aliases}
         self._lock = threading.Lock()
         self._current = None
         self._history = deque(maxlen=MAX_HISTORY)
+        self.tee_output = tee_output
 
     def status(self):
         with self._lock:
@@ -123,7 +128,10 @@ class PythonSession:
             return {
                 "session_id": self.session_id,
                 "current_cell": current,
-                "recent_cells": [dict(cell) for cell in self._history],
+                "recent_cells": [
+                    {key: value for key, value in cell.items() if key != "code"}
+                    for cell in self._history
+                ],
             }
 
     def run(self, code, cell_id=None):
@@ -140,7 +148,8 @@ class PythonSession:
         self.namespace.update(self.aliases)
         self.namespace["__builtins__"] = dict(vars(builtins))
         self.namespace.pop("_result", None)
-        stdout, stderr = CapturedStream(sys.stdout), CapturedStream(sys.stderr)
+        stdout = CapturedStream(sys.stdout, self.tee_output)
+        stderr = CapturedStream(sys.stderr, self.tee_output)
         response = {"session_id": self.session_id, "cell_id": cell_id}
         try:
             with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):

@@ -35,12 +35,15 @@ async def lifespan(_server):
         await asyncio.to_thread(connection().ping)
     except Exception as exc:
         logger.warning("Start the matching FreeCAD addon before using tools: %s", exc)
-    yield
-    state.freecad_connection = None
+    try:
+        yield
+    finally:
+        state.freecad_connection = None
 
 
 mcp = FastMCP(
     "FreeCADMCP",
+    log_level="WARNING",
     instructions=(
         "Write Python to control FreeCAD. App/FreeCAD and Gui/FreeCADGui are "
         "preloaded; imports, variables and functions persist between execute_python "
@@ -52,6 +55,9 @@ mcp = FastMCP(
         "using returned tracebacks. Changes before an exception remain applied; no "
         "automatic rollback. A live timeout does not cancel running code: check "
         "get_runtime_status before retrying. Code runs with FreeCAD's full privileges."
+        " Use test_python to check scripts/assertions in a fresh, disposable headless "
+        "FreeCAD process. It cannot access the live namespace, unsaved state or Gui. "
+        "When a saved document is supplied, doc refers to its temporary copy."
     ),
     lifespan=lifespan,
 )
@@ -127,6 +133,29 @@ async def get_runtime_status() -> CallToolResult:
     restart FreeCAD manually if it does not. Restarting loses session variables.
     """
     return await rpc_call(connection().get_runtime_status)
+
+
+@mcp.tool(structured_output=False)
+async def test_python(
+    code: Annotated[str, Field(max_length=100_000)],
+    document_path: str | None = None,
+    timeout_seconds: Annotated[int, Field(ge=1, le=3600)] = 60,
+) -> CallToolResult:
+    """Test Python and assertions in a disposable FreeCADCmd of the same version.
+
+    A fresh process, profile and temporary workspace are used for every call
+    on the FreeCAD host. App/FreeCAD are available; Gui and the live namespace
+    are not. Optionally pass the absolute path of a saved .FCStd; a copy is
+    opened as doc. Unsaved live edits are not included. Files in the temporary
+    workspace are discarded, so return results rather than artifact paths.
+
+    Returns the same result/stdout/stderr/traceback fields as execute_python,
+    plus FreeCAD version, process logs, exit status and timeout status. The
+    process is terminated on timeout. One test may run at a time; status and
+    live execution stay available. This is process isolation, not a security
+    sandbox: arbitrary Python still has the host user's filesystem/network access.
+    """
+    return await rpc_call(connection().test_python, code, document_path, timeout_seconds)
 
 
 def _validate_host(value: str) -> str:

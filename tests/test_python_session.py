@@ -1,7 +1,6 @@
 import importlib.util
 import json
 from pathlib import Path
-import sys
 import threading
 
 import pytest

@@ -9,6 +9,7 @@ and older addons expose a different interface.
 | `execute_python(code, timeout_seconds=90)` | Run Python in the live FreeCAD GUI, retaining variables between calls. |
 | `get_view(width=1024, height=768)` | Return the current 3D view as an MCP PNG image. |
 | `get_runtime_status()` | Read FreeCAD version and execution health, even while the GUI is busy. |
+| `test_python(code, document_path=None, timeout_seconds=60)` | Run assertions/scripts in a fresh FreeCADCmd process, optionally opening a saved document copy. |
 
 Documents, objects, sketches, libraries, imports/exports, and FEM are all handled
 by the native Python API. There are no separate modeling tools.
@@ -80,6 +81,9 @@ select the properties you need explicitly. Output/result sizes and source
 history are bounded; truncation is reported. Python stdout/stderr are captured;
 native FreeCAD console diagnostics may still appear only in Report View.
 
+Runtime status returns recent cell IDs and outcomes; source is retained in a
+bounded history for tracebacks, rather than repeating scripts on every poll.
+
 For visual verification, set the camera in Python and then call `get_view`:
 
 ```python
@@ -102,6 +106,28 @@ immediately until it finishes. Check `get_runtime_status` before retrying.
 If execution never finishes, restart FreeCAD manually. Python has the same
 filesystem and process privileges as FreeCAD; it is not a security sandbox.
 
+Use `test_python` to check a complete script before applying it to the live
+document. Every test starts a new FreeCADCmd on the FreeCAD host with its own
+profile and temporary workspace. The worker must match the live FreeCAD
+version and build. `App`/`FreeCAD` are preloaded; live variables and `Gui` are
+unavailable. When `document_path` is supplied, it must be an absolute `.FCStd`
+path on that host; the temporary copy is opened as `doc`. It includes saved
+state only. Linked external files are not copied.
+
+The worker returns result, stdout/stderr, exception traceback, process logs,
+exit status and whether it timed out. Output printed before a timeout remains
+available in the process logs. The worker is terminated on timeout and its
+temporary workspace is removed. One test runs at a time; live execution and
+runtime status remain available. Return values instead of temporary artifact
+paths. As with live execution, Python retains the host user's filesystem and
+network access; this isolates FreeCAD state, not untrusted code.
+
+FreeCADCmd is located beside the running FreeCAD installation. For layouts
+where it is elsewhere, set `FREECAD_MCP_FREECADCMD` to its executable path
+**before launching FreeCAD**. This setting belongs to the addon host, including
+when the MCP client connects remotely. `get_runtime_status` reports availability
+and the current test. GUI workbenches and view behavior still need live testing.
+
 Run unit tests with `uv run pytest -q`. The integration test is opt-in and must
 target a separate FreeCAD GUI/profile with this addon installed:
 
@@ -116,9 +142,14 @@ FREECAD_MCP_INTEGRATION=1 FREECAD_MCP_FEM=1 uv run pytest -q -s tests/integratio
 
 It checks the actual MCP protocol, geometry, failed assertions and corrected
 code, sketches/booleans, PNG capture, FCStd/STEP round trips, busy/stuck status
-and recovery. The second command also executes real Gmsh/CalculiX.
+and recovery. It also verifies disposable process assertions, source-document
+preservation, forced timeout, abnormal exit and successful retry. The second
+command also executes real Gmsh/CalculiX.
 Set `FREECAD_MCP_HOST`/`FREECAD_MCP_PORT` to target a different test bridge.
 The FEM test may configure bundled solver paths in that isolated profile.
+Set `FREECAD_MCP_IMAGE_PATH` to save its captured PNG for inspection. Live
+integration has been verified on Linux with the official FreeCAD 1.1.3 build;
+Windows and macOS have not been exercised here.
 
 Derived from [neka-nat/freecad-mcp](https://github.com/neka-nat/freecad-mcp).
 Original authorship and license are retained.

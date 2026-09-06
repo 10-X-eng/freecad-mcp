@@ -2,8 +2,6 @@ import asyncio
 import json
 import threading
 
-import pytest
-
 from freecad_mcp import server
 
 
@@ -11,7 +9,7 @@ def test_only_transport_and_execution_tools_are_registered():
     async def inspect():
         tools = await server.mcp.list_tools()
         assert [tool.name for tool in tools] == [
-            "execute_python", "get_view", "get_runtime_status",
+            "execute_python", "get_view", "get_runtime_status", "test_python",
         ]
         assert await server.mcp.list_prompts() == []
         schema = tools[0].inputSchema
