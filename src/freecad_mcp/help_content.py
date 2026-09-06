@@ -30,6 +30,7 @@ _HELP: dict[str, dict] = {
         "guidance": [
             "ExecutePython runs in live FreeCAD with App and Gui preloaded. Imports and variables persist across calls.",
             "Return the last expression or assign _result. Call doc.recompute() after edits.",
+            "Never pass a bare number as a dimension. Assign explicit strings such as '2 mm' or '0.25 in'; for APIs requiring numeric internal units, use App.Units.Quantity('0.25 in').Value. Raw geometry numbers are internal units, not the UI schema.",
             "Discover the installed API through ExecutePython: use dir(), help(), inspect.signature(), module.__file__, and App.getHomePath(). This stays version-correct without copied documentation.",
             "An exception does not roll back earlier statements. Inspect live state before retrying; use document transactions when atomicity matters.",
             "A timeout stops waiting, not execution. Check GetRuntimeStatus before retrying.",
@@ -59,6 +60,7 @@ _HELP: dict[str, dict] = {
             "Call action=providers, then search with a short query. Use the returned stable resource_id with inspect before insert when sizes or parameters matter.",
             "insert requires the internal document name. Fasteners accept properties such as Diameter, Length, and Thread; attach_to uses ObjectName.Edge1 or ObjectName.Face1.",
             "FCGear inspect returns its installed parameter schema; use exact lowercase names such as module, num_teeth, height, helix_angle, and axle_hole.",
+            "Dimensional properties require explicit unit strings. freecad_units reports the configured profile schema; each inspected quantity includes the actual preferred unit FreeCAD selected for its magnitude.",
             "File-backed FCStd and STEP resources are discovered dynamically. Search results are references; nothing is inserted until action=insert.",
         ],
         "related": ["documents", "workbenches", "inspection", "validation"],
@@ -75,7 +77,7 @@ _HELP: dict[str, dict] = {
     "validation": {
         "guidance": [
             "Validate in layers: Python assertions, InspectDocument tree/properties, GetView, save, then TestPython against the saved .FCStd when headless verification applies.",
-            "TestPython is a fresh FreeCADCmd process: it has App but no Gui or live variables, and document_path contains only saved state.",
+            "TestPython is a fresh FreeCADCmd process: it has App and the live profile's unit settings but no Gui or live variables; document_path contains only saved state.",
             "Do not claim a workbench works from imports alone. Exercise a real operation and verify its native outputs.",
         ],
         "related": ["inspection", "fem", "cam", "blocked"],

@@ -1,5 +1,7 @@
 """Compact, read-only inspection of native FreeCAD document structure."""
 
+from rpc_server.unit_safety import preferred_internal, preferred_quantity, preferred_vector
+
 
 MAX_TREE_OBJECTS = 500
 MAX_PROPERTY_ITEMS = 100
@@ -133,50 +135,53 @@ def _vector(value):
     return [value.x, value.y, value.z]
 
 
-def _shape(value):
+def _shape(app, value):
     if value.isNull():
         return {"null": True}
     bounds = value.BoundBox
     return {
         "shape_type": value.ShapeType,
         "solids": len(value.Solids),
-        "volume": value.Volume,
-        "bounds": [bounds.XLength, bounds.YLength, bounds.ZLength],
+        "volume": preferred_internal(app, value.Volume, "mm^3"),
+        "bounds": preferred_vector(
+            app, [bounds.XLength, bounds.YLength, bounds.ZLength],
+        ),
     }
 
 
-def _value(value, property_type, depth=0):
+def _value(value, property_type, depth=0, app=None):
     if value is None or type(value) in (bool, int, float, str):
         return value
     if depth >= 4:
         return "<nested>"
     if property_type == "Part::PropertyPartShape":
-        return _shape(value)
+        return _shape(app, value)
     if property_type == "App::PropertyPlacement" or (
         hasattr(value, "Base") and hasattr(value, "Rotation")
     ):
-        return {"base": _vector(value.Base), "rotation": list(value.Rotation.Q)}
+        return {
+            "base": preferred_vector(app, _vector(value.Base)),
+            "rotation": list(value.Rotation.Q),
+        }
+    if property_type in {"App::PropertyPosition", "App::PropertyVectorDistance"}:
+        return preferred_vector(app, _vector(value))
     if property_type == "App::PropertyVector" or all(
         hasattr(value, coordinate) for coordinate in ("x", "y", "z")
     ):
         return _vector(value)
     if hasattr(value, "Value") and hasattr(value, "Unit"):
-        try:
-            _display, conversion, unit = value.getUserPreferred()
-            return {"value": value.Value / float(conversion), "unit": unit}
-        except Exception:
-            return {"value": value.Value, "unit": str(value.Unit)}
+        return preferred_quantity(value)
     if hasattr(value, "Name") and hasattr(value, "Document"):
         return {"object": value.Name}
     if isinstance(value, (list, tuple)):
-        items = [_value(item, "", depth + 1) for item in value[:MAX_PROPERTY_ITEMS]]
+        items = [_value(item, "", depth + 1, app) for item in value[:MAX_PROPERTY_ITEMS]]
         if len(value) > MAX_PROPERTY_ITEMS:
             items.append("<truncated>")
         return items
     if isinstance(value, dict):
         items = list(value.items())
         result = {
-            str(key): _value(item, "", depth + 1)
+            str(key): _value(item, "", depth + 1, app)
             for key, item in items[:MAX_PROPERTY_ITEMS]
         }
         if len(items) > MAX_PROPERTY_ITEMS:
@@ -199,7 +204,7 @@ def _property_modes(obj, name):
     return list(modes) if isinstance(modes, (list, tuple)) else [str(modes)]
 
 
-def _object_detail(obj, children, parents, requested_properties):
+def _object_detail(app, obj, children, parents, requested_properties):
     detail = _node(obj)
     detail["parents"] = parents.get(obj.Name, [])
     detail["children"] = [child.Name for child in children[obj.Name]]
@@ -222,7 +227,7 @@ def _object_detail(obj, children, parents, requested_properties):
             property_type = obj.getTypeIdOfProperty(name)
             value = {
                 "type": property_type,
-                "value": _value(getattr(obj, name), property_type),
+                "value": _value(getattr(obj, name), property_type, app=app),
             }
             modes = _property_modes(obj, name)
             if modes:
@@ -251,7 +256,7 @@ def inspect_document(app, gui, document=None, object_name=None, properties=None,
         return {
             "document": doc.Name,
             "object": _object_detail(
-                obj, children, parents, properties or [],
+                app, obj, children, parents, properties or [],
             ),
         }
 

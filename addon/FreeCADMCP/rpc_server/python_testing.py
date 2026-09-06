@@ -83,7 +83,10 @@ class PythonTestRunner:
             )
         return {"available": self.command is not None, "command": self.command, "current_test": current}
 
-    def run(self, code: str, document_path: str | None = None, timeout_seconds: int = 60):
+    def run(
+        self, code: str, document_path: str | None = None,
+        timeout_seconds: int = 60, unit_settings: dict | None = None,
+    ):
         if not isinstance(code, str) or len(code) > MAX_CODE_CHARS:
             raise ValueError(f"code must be a string of at most {MAX_CODE_CHARS} characters")
         if type(timeout_seconds) is not int or not 1 <= timeout_seconds <= 3600:
@@ -101,7 +104,10 @@ class PythonTestRunner:
             self._current = {"test_id": test_id, "started_at": started}
         try:
             with tempfile.TemporaryDirectory(prefix="freecad_mcp_test_") as directory:
-                response = self._run(Path(directory), code, document_path, timeout_seconds)
+                response = self._run(
+                    Path(directory), code, document_path, timeout_seconds,
+                    unit_settings,
+                )
             # Return only after the temporary workspace has actually been removed.
             response.update(
                 test_id=test_id, workspace_removed=True,
@@ -117,7 +123,7 @@ class PythonTestRunner:
                 self._current = None
             self._gate.release()
 
-    def _run(self, directory, code, document_path, timeout):
+    def _run(self, directory, code, document_path, timeout, unit_settings):
         input_path = None
         if document_path is not None:
             source = Path(document_path)
@@ -130,6 +136,7 @@ class PythonTestRunner:
         request_path.write_text(json.dumps({
             "code": code, "document_path": str(input_path) if input_path else None,
             "expected_version": self.expected_version,
+            "unit_settings": unit_settings,
         }), encoding="utf-8")
         env = dict(os.environ)
         for name, subdirectory in {

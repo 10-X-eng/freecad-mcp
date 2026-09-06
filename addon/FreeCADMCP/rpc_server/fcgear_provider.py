@@ -11,6 +11,11 @@ import sys
 import uuid
 from typing import Any
 
+from rpc_server.unit_safety import (
+    preferred_internal, preferred_quantity, preferred_vector,
+    require_explicit_quantity,
+)
+
 
 class FCGearProviderError(RuntimeError):
     pass
@@ -113,11 +118,7 @@ def _value(value):
     if value is None or type(value) in (bool, int, float, str):
         return value
     if hasattr(value, "Value") and hasattr(value, "Unit"):
-        try:
-            _display, conversion, unit = value.getUserPreferred()
-            return {"value": value.Value / float(conversion), "unit": unit}
-        except Exception:
-            return {"value": value.Value, "unit": str(value.Unit)}
+        return preferred_quantity(value)
     return str(value)
 
 
@@ -146,19 +147,26 @@ def _apply_properties(obj, properties: dict[str, Any], allowed: set[str], doc) -
         raise FCGearProviderError(f"Unsupported FCGear properties: {sorted(unknown)}")
     for name, value in properties.items():
         try:
+            require_explicit_quantity(obj, name, value)
             setattr(obj, name, value)
+        except ValueError as exc:
+            raise FCGearProviderError(str(exc)) from exc
         except Exception as exc:
             raise FCGearProviderError(f"Invalid {name}={value!r}: {exc}") from exc
     doc.recompute()
 
 
-def _shape(obj) -> dict[str, Any]:
+def _shape(app, obj) -> dict[str, Any]:
     shape = obj.Shape
     if shape.isNull() or not shape.isValid() or not math.isfinite(shape.Volume):
         raise FCGearProviderError("FCGear generated an invalid shape")
     return {
-        "solids": len(shape.Solids), "volume": shape.Volume,
-        "bounds": [shape.BoundBox.XLength, shape.BoundBox.YLength, shape.BoundBox.ZLength],
+        "solids": len(shape.Solids),
+        "volume": preferred_internal(app, shape.Volume, "mm^3"),
+        "bounds": preferred_vector(
+            app,
+            [shape.BoundBox.XLength, shape.BoundBox.YLength, shape.BoundBox.ZLength],
+        ),
     }
 
 
@@ -179,7 +187,7 @@ def inspect_resource(
         result = {
             "id": resource_id, "provider": "fcgear",
             "label": str(command.MenuText), "description": str(command.ToolTip),
-            "parameters": parameters, "shape": _shape(probe),
+            "parameters": parameters, "shape": _shape(app, probe),
         }
         if properties:
             result["effective_properties"] = {
@@ -209,7 +217,7 @@ def insert(
         command.GEAR_FUNCTION(probe)
         parameters = _parameters(probe, original)
         _apply_properties(probe, properties or {}, set(parameters), doc)
-        shape = _shape(probe)
+        shape = _shape(app, probe)
         doc.commitTransaction()
     except Exception:
         doc.abortTransaction()

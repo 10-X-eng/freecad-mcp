@@ -76,6 +76,19 @@ def encode_result(value):
             truncated |= len(item) > length
             budget[0] -= min(length, len(item))
             return item[:length]
+        # FreeCAD Quantity and quantity-valued document properties expose this
+        # protocol. Preserve the dimension and use the profile's display unit
+        # instead of reducing them to an opaque repr or an unlabeled float.
+        if all(hasattr(item, name) for name in ("Value", "Unit", "getUserPreferred")):
+            try:
+                _display, conversion, unit = item.getUserPreferred()
+                value = item.Value / float(conversion)
+                return {
+                    "value": value if math.isfinite(value) else repr(value),
+                    "unit": str(unit),
+                }
+            except Exception:
+                pass
         if id(item) in seen:
             return "<recursive reference>"
         if type(item) in (list, tuple, dict):

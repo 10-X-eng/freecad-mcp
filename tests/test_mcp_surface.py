@@ -43,12 +43,31 @@ def test_focused_python_and_document_tools_are_registered():
 
 def test_help_is_focused_and_does_not_require_freecad_connection(monkeypatch):
     monkeypatch.setattr(server.state, "freecad_connection", None)
+    monkeypatch.setattr(server, "connection", lambda: (_ for _ in ()).throw(
+        ConnectionRefusedError("offline")
+    ))
     result = asyncio.run(server.mcp.call_tool("GetHelp", {"topic": "cam"}))
     data = json.loads(result.content[0].text)
     assert data["topic"] == "cam"
     assert "CAMWorkbench" in " ".join(data["guidance"])
     assert "PathWorkbench" in " ".join(data["guidance"])
     assert len(result.content[0].text.split()) < 180
+
+
+def test_help_includes_live_freecad_units(monkeypatch):
+    class Connection:
+        def get_runtime_status(self):
+            return {
+                "success": True,
+                "units": {"schema": "Imperial", "preferred": {"length": "in"}},
+            }
+
+    monkeypatch.setattr(server.state, "freecad_connection", Connection())
+    result = asyncio.run(server.mcp.call_tool("GetHelp", {"topic": "resources"}))
+    data = json.loads(result.content[0].text)
+    assert data["freecad_units"] == {
+        "schema": "Imperial", "preferred": {"length": "in"},
+    }
 
 
 def test_status_remains_responsive_through_same_mcp_server(monkeypatch):

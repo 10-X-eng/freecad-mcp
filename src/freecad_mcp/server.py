@@ -60,9 +60,16 @@ async def get_help(topic: HelpTopic = "start") -> CallToolResult:
     """Get focused operating guidance. Start with topic=start. Other topics:
     python, documents, workbenches, resources, inspection, validation, fem, cam, blocked.
     """
+    content = get_help_content(topic)
+    try:
+        status = await asyncio.to_thread(connection().get_runtime_status)
+        if status.get("success") and status.get("units"):
+            content["freecad_units"] = status["units"]
+    except Exception:
+        pass
     return CallToolResult(content=[TextContent(
         type="text",
-        text=json.dumps(get_help_content(topic), ensure_ascii=False, separators=(",", ":")),
+        text=json.dumps(content, ensure_ascii=False, separators=(",", ":")),
     )])
 
 
@@ -114,7 +121,9 @@ async def execute_python(
     expression or assign _result; _ holds the previous result. Use dir()/help()
     to explore the API and doc.recompute() after edits. Errors include source
     tracebacks but do not undo changes. Timeout stops waiting, not running
-    code: check GetRuntimeStatus before retrying. Full host privileges.
+    code: check GetRuntimeStatus before retrying. Use explicit units for every
+    dimension; convert with App.Units.Quantity('0.25 in').Value when an API
+    requires an internal numeric value. Full host privileges.
     """
     return await rpc_call(connection().execute_python, code, timeout_seconds)
 
@@ -151,7 +160,8 @@ async def resource_operations(
     """Use installed component providers through one interface. providers lists
     them; search(query, optional provider) returns stable IDs; inspect(resource_id,
     optional properties) returns choices; insert(resource_id, document, optional
-    properties/attach_to). attach_to is ObjectName.Edge1 or ObjectName.Face1.
+    properties/attach_to). Dimensional properties require explicit unit strings.
+    attach_to is ObjectName.Edge1 or ObjectName.Face1.
     """
     return await rpc_call(
         connection().resource_operations,
@@ -181,9 +191,9 @@ async def get_view(
 
 @mcp.tool(name="GetRuntimeStatus", structured_output=False)
 async def get_runtime_status() -> CallToolResult:
-    """Read FreeCAD version, session identity, GUI state and test-worker state.
-    Responds while GUI Python is busy. If stuck, wait or restart FreeCAD;
-    restarting loses live variables. A changed session_id also means they reset.
+    """Read FreeCAD version, configured unit schema, session identity, GUI and
+    test-worker state. Responds while GUI Python is busy. If stuck, wait or
+    restart FreeCAD; restarting clears live variables.
     """
     return await rpc_call(connection().get_runtime_status, status=True)
 
@@ -194,11 +204,11 @@ async def test_python(
     document_path: str | None = None,
     timeout_seconds: Annotated[int, Field(ge=1, le=3600)] = 60,
 ) -> CallToolResult:
-    """Run Python/assertions in a fresh, matching FreeCADCmd with App, but no Gui
-    or live variables. Return the last expression or assign _result. An optional
-    absolute document_path opens a saved .FCStd copy as doc, excluding unsaved
-    edits. Timeout kills the worker. Temporary files are discarded; return data.
-    Filesystem/network access is NOT sandboxed.
+    """Run Python/assertions in a fresh, matching FreeCADCmd with App and the
+    live unit settings, but no Gui or live variables. Return the last expression
+    or assign _result. An optional absolute document_path opens a saved .FCStd
+    copy as doc, excluding unsaved edits. Timeout kills the worker. Temporary
+    files are discarded; return data. Filesystem/network access is NOT sandboxed.
     """
     return await rpc_call(connection().test_python, code, document_path, timeout_seconds)
 

@@ -178,9 +178,9 @@ Submit a cell to `ExecutePython`:
 ```python
 doc = App.newDocument("Demo")
 box = doc.addObject("Part::Box", "Box")
-box.Length, box.Width, box.Height = 20, 15, 10
+box.Length, box.Width, box.Height = "20 mm", "15 mm", "10 mm"
 doc.recompute()
-{"volume": box.Shape.Volume, "valid": box.Shape.isValid()}
+{"volume_mm3": box.Shape.Volume, "valid": box.Shape.isValid()}
 ```
 
 The final expression becomes the returned `result`. Imports, functions and
@@ -188,7 +188,7 @@ variables persist in the live FreeCAD process, including across MCP reconnects.
 Connected clients share that namespace. A later cell can inspect or modify it:
 
 ```python
-box.Length = 40
+box.Length = "40 mm"
 doc.recompute()
 assert box.Shape.isValid()
 assert abs(box.Shape.Volume - 6000) < 1e-6
@@ -219,9 +219,17 @@ property schemas; connector and planetary commands are excluded because they
 operate on multiple existing objects rather than inserting one component.
 
 ```json
-{"action":"inspect","resource_id":"fcgear:InvoluteGear","properties":{"module":2,"num_teeth":24,"height":8}}
-{"action":"insert","resource_id":"fcgear:InvoluteGear","document":"Gearbox","properties":{"module":2,"num_teeth":24,"height":8}}
+{"action":"inspect","resource_id":"fcgear:InvoluteGear","properties":{"module":"2 mm","num_teeth":24,"height":"8 mm"}}
+{"action":"insert","resource_id":"fcgear:InvoluteGear","document":"Gearbox","properties":{"module":"2 mm","num_teeth":24,"height":"8 mm"}}
 ```
+
+Dimensional resource properties reject bare numbers: always include a unit.
+`GetHelp` and `GetRuntimeStatus` report the running FreeCAD profile's configured
+unit schema and decimal precision. FreeCAD can choose different display units
+within one schema based on magnitude, so every inspected quantity carries its
+actual preferred unit. In Python, assign strings such as
+`obj.Length = "0.25 in"`; when an API requires a numeric internal value, convert
+explicitly with `App.Units.Quantity("0.25 in").Value`.
 
 You can also assign `_result` explicitly in a cell that ends in a statement.
 `_` holds the last successful expression result. `App`/`FreeCAD` and
@@ -231,6 +239,8 @@ You can also assign `_result` explicitly in a cell that ends in a statement.
 Results contain only the returned value and non-empty stdout/stderr. A cell
 with neither returns `{"ok":true}`. Exceptions return a source traceback in
 `error` and set MCP `isError`; transport failures include an error message.
+Returned FreeCAD quantities become `{"value":...,"unit":...}` in the profile's
+preferred display unit; plain geometry floats remain FreeCAD internal units.
 Python exceptions do not undo changes already made; inspect the document
 before retrying. Restarting FreeCAD clears the namespace.
 
@@ -276,11 +286,12 @@ same document manually while a model is modifying it.
 
 Use `TestPython` to check a complete script before applying it to the live
 document. Every test starts a new FreeCADCmd on the FreeCAD host with its own
-profile and temporary workspace. The worker must match the live FreeCAD
-version and build. `App`/`FreeCAD` are preloaded; live variables and `Gui` are
-unavailable. When `document_path` is supplied, it must be an absolute `.FCStd`
-path on that host; the temporary copy is opened as `doc`. It includes saved
-state only. Linked external files are not copied.
+profile and temporary workspace, copying the live profile's unit schema and
+decimal precision. The worker must match the live FreeCAD version and build.
+`App`/`FreeCAD` are preloaded; live variables and `Gui` are unavailable. When
+`document_path` is supplied, it must be an absolute `.FCStd` path on that host;
+the temporary copy is opened as `doc`. It includes saved state only. Linked
+external files are not copied.
 
 The worker uses the same compact result format. Native diagnostics are retained,
 but the startup banner and exact duplicate Python output are removed. Failures

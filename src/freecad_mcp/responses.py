@@ -92,4 +92,6 @@ def runtime_feedback(data):
         out["freecad_version"] = ".".join(data["freecad_version"][:3])
     if data.get("session_id"):
         out["session_id"] = data["session_id"]
+    if data.get("units"):
+        out["units"] = data["units"]
     return out

@@ -61,6 +61,7 @@ async def exercise():
             status = await call("GetRuntimeStatus")
             assert status["freecad_version"] == "1.1.3", status
             assert status["test_worker"]["state"] == "ready", status
+            assert status["units"]["schema"], status
             print("REAL FreeCAD version:", status["freecad_version"])
 
             # The production document tool owns lifecycle and protects live edits.
@@ -90,7 +91,7 @@ async def exercise():
                 }
                 shape = box_detail["result"]["object"]["properties"]["Shape"]["value"]
                 assert shape["solids"] == 1
-                assert shape["volume"] == pytest.approx(1000.0)
+                assert shape["volume"] == {"value": pytest.approx(1.0), "unit": "ml"}
                 print("REAL_FREECAD_DOCUMENT_INSPECTION_PASS")
                 saved = await call("DocumentOperations", {
                     "action": "save_as", "document": lifecycle_name,
@@ -262,7 +263,7 @@ async def exercise():
                     })
                     screw = inserted_screw["result"]
                     assert screw["shape"]["solids"] == 1
-                    assert screw["shape"]["volume"] > 0
+                    assert screw["shape"]["volume"]["value"] > 0
 
                     bearings = await call("ResourceOperations", {
                         "action": "search", "provider": "parts_library",
@@ -292,9 +293,9 @@ async def exercise():
                             "fcgear:InvoluteGear"
                         )
                         gear_properties = {
-                            "module": 2, "num_teeth": 24, "height": 8,
+                            "module": "2 mm", "num_teeth": 24, "height": "8 mm",
                             "helix_angle": "15 deg", "axle_hole": True,
-                            "axle_holesize": 8,
+                            "axle_holesize": "8 mm",
                         }
                         gear_info = await call("ResourceOperations", {
                             "action": "inspect",
@@ -316,6 +317,58 @@ async def exercise():
                             "value": pytest.approx(48.0), "unit": "mm",
                         }
                         assert gear["shape"]["solids"] == 1
+
+                        await run(
+                            "original_unit_schema = App.Units.getSchema()\n"
+                            "unit_preferences = App.ParamGet('User parameter:BaseApp/Preferences/Units')\n"
+                            "original_user_schema = unit_preferences.GetInt('UserSchema', original_unit_schema)\n"
+                            "unit_preferences.SetInt('UserSchema', 2)\n"
+                            "App.Units.setSchema(2)"
+                        )
+                        try:
+                            imperial_status = await call("GetRuntimeStatus")
+                            assert imperial_status["units"]["schema"] == "Imperial"
+                            unit_help = await call("GetHelp", {"topic": "resources"})
+                            assert unit_help["freecad_units"]["schema"] == "Imperial"
+                            live_quantity = await run(
+                                "App.Units.Quantity('0.125 in')"
+                            )
+                            assert live_quantity["result"] == {
+                                "value": pytest.approx(0.125), "unit": '"',
+                            }
+                            tested_quantity = await call("TestPython", {
+                                "code": "App.Units.Quantity('0.125 in')",
+                            })
+                            assert tested_quantity["result"] == {
+                                "value": pytest.approx(0.125), "unit": '"',
+                            }
+                            ambiguous = await call("ResourceOperations", {
+                                "action": "inspect",
+                                "resource_id": "fcgear:InvoluteGear",
+                                "properties": {"module": 1},
+                            }, False)
+                            assert "explicit unit string" in ambiguous["error"]
+                            imperial_gear = await call("ResourceOperations", {
+                                "action": "inspect",
+                                "resource_id": "fcgear:InvoluteGear",
+                                "properties": {
+                                    "module": "0.125 in", "num_teeth": 16,
+                                    "height": "0.25 in",
+                                },
+                            })
+                            imperial_result = imperial_gear["result"]
+                            assert imperial_result["effective_properties"]["module"] == {
+                                "value": pytest.approx(0.125), "unit": '"',
+                            }
+                            assert imperial_result["shape"]["bounds"]["unit"] == '"'
+                            assert imperial_result["shape"]["volume"]["unit"] in {
+                                "in^3", "in³",
+                            }
+                        finally:
+                            await run(
+                                "unit_preferences.SetInt('UserSchema', original_user_schema)\n"
+                                "App.Units.setSchema(original_unit_schema)"
+                            )
                         print("REAL_FREECAD_FCGEAR_RESOURCE_PASS")
 
                     inspected_resources = await call("InspectDocument", {

@@ -58,9 +58,16 @@ def test_search_exposes_creatable_gears_but_not_relational_commands(monkeypatch,
 
 
 def test_parameter_application_rejects_unknown_names():
-    obj = SimpleNamespace(module=1.0)
+    obj = SimpleNamespace(
+        module="1 mm",
+        getTypeIdOfProperty=lambda name: {
+            "module": "App::PropertyLength",
+        }[name],
+    )
     doc = SimpleNamespace(recompute=lambda: None)
-    fcgear._apply_properties(obj, {"module": 2.0}, {"module"}, doc)
-    assert obj.module == 2.0
+    fcgear._apply_properties(obj, {"module": "2 mm"}, {"module"}, doc)
+    assert obj.module == "2 mm"
+    with pytest.raises(fcgear.FCGearProviderError, match="explicit unit string"):
+        fcgear._apply_properties(obj, {"module": 2.0}, {"module"}, doc)
     with pytest.raises(fcgear.FCGearProviderError, match="Unsupported"):
         fcgear._apply_properties(obj, {"made_up": 3}, {"module"}, doc)

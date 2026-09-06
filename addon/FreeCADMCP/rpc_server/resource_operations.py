@@ -11,6 +11,7 @@ import sys
 from typing import Any
 
 from rpc_server import fcgear_provider
+from rpc_server.unit_safety import preferred_internal, require_explicit_quantity
 
 
 COMPONENT_SUFFIXES = {".fcstd", ".step", ".stp"}
@@ -275,6 +276,10 @@ def _set_fastener_properties(obj, properties: dict[str, Any], allowed: set[str],
     ordered += [name for name in properties if name not in ordered]
     for name in ordered:
         value = properties[name]
+        try:
+            require_explicit_quantity(obj, name, value)
+        except ValueError as exc:
+            raise ResourceOperationError(str(exc)) from exc
         if name == "Length" and "LengthCustom" in obj.PropertiesList:
             choices = obj.getEnumerationsOfProperty("Length")
             if str(value) not in choices:
@@ -321,7 +326,10 @@ def _insert_fastener(app, resource_id, document, properties, attach_to) -> dict[
         "document": doc.Name,
         "object": {"name": obj.Name, "label": obj.Label, "type": obj.TypeId},
         "properties": effective,
-        "shape": {"solids": len(obj.Shape.Solids), "volume": obj.Shape.Volume},
+        "shape": {
+            "solids": len(obj.Shape.Solids),
+            "volume": preferred_internal(app, obj.Shape.Volume, "mm^3"),
+        },
     }
 
 

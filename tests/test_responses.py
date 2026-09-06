@@ -113,6 +113,18 @@ def test_idle_status_has_identity_and_availability_without_empty_fields_or_histo
     }
 
 
+def test_runtime_status_preserves_live_unit_preferences():
+    result = runtime_feedback({
+        "success": True,
+        "gui_dispatch": {"state": "healthy"},
+        "test_worker": {"available": True},
+        "units": {"schema": "Imperial", "preferred": {"length": "in"}},
+    })
+    assert result["units"] == {
+        "schema": "Imperial", "preferred": {"length": "in"},
+    }
+
+
 def test_busy_status_retains_elapsed_time_without_unusable_ids():
     status = runtime_feedback({
         "gui_dispatch": {"state": "stuck", "operation": "execute_python:opaque-id",

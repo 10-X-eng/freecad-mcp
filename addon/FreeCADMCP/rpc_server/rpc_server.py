@@ -24,6 +24,7 @@ from rpc_server.python_session import PythonSession, MAX_CODE_CHARS
 from rpc_server.python_testing import PythonTestRunner, find_freecadcmd
 from rpc_server.resource_operations import resource_operations as perform_resource_operation
 from rpc_server.settings import load_settings
+from rpc_server.unit_safety import preferred_units
 from rpc_server.view_manager import save_view
 
 rpc_server_thread = None
@@ -47,7 +48,7 @@ class FreeCADRPC:
 
     def get_runtime_status(self) -> dict:
         """Report status without queueing anything on the GUI thread."""
-        return {
+        status = {
             "success": True,
             "rpc_server": "running",
             "gui_dispatch": get_dispatch_status(),
@@ -55,11 +56,18 @@ class FreeCADRPC:
             **_python_session.status(),
             "test_worker": self._test_runner.status(),
         }
+        try:
+            status["units"] = preferred_units(FreeCAD)
+        except Exception:
+            pass
+        return status
 
     def test_python(self, code, document_path=None, timeout_seconds=60) -> str:
         # Run on this RPC request thread: no live GUI or document access.
         return json.dumps(
-            self._test_runner.run(code, document_path, timeout_seconds),
+            self._test_runner.run(
+                code, document_path, timeout_seconds, preferred_units(FreeCAD),
+            ),
             ensure_ascii=False, allow_nan=False,
         )
 

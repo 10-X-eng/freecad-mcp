@@ -24,6 +24,14 @@ def main():
                 "expected_version": request["expected_version"],
             }
         else:
+            unit_settings = request.get("unit_settings")
+            if unit_settings and hasattr(App, "Units"):
+                preferences = App.ParamGet(
+                    "User parameter:BaseApp/Preferences/Units"
+                )
+                preferences.SetInt("UserSchema", unit_settings["schema_id"])
+                preferences.SetInt("Decimals", unit_settings["decimals"])
+                App.Units.setSchema(unit_settings["schema_id"])
             aliases = {"FreeCAD": App, "App": App}
             if request["document_path"]:
                 aliases["doc"] = App.openDocument(request["document_path"])

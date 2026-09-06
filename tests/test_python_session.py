@@ -34,6 +34,20 @@ def test_result_contract_handles_native_opaque_and_recursive_values():
     json.dumps(session.run("float('nan')"), allow_nan=False)
 
 
+def test_quantity_results_use_preferred_units():
+    class Quantity:
+        Value = 25.4
+        Unit = object()
+
+        def getUserPreferred(self):
+            return '1.00"', 25.4, '"'
+
+    session = module.PythonSession({"quantity": Quantity()})
+    assert session.run("{'length': quantity}")["result"] == {
+        "length": {"value": 1.0, "unit": '"'},
+    }
+
+
 @pytest.mark.parametrize("code, error", [
     ("if", "SyntaxError"), ("raise SystemExit(2)", "SystemExit"),
     ("raise KeyboardInterrupt()", "KeyboardInterrupt"),
