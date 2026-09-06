@@ -11,14 +11,14 @@ def test_focused_python_and_document_tools_are_registered():
         tools = await server.mcp.list_tools()
         assert [tool.name for tool in tools] == [
             "GetHelp", "DocumentOperations", "ExecutePython", "InspectDocument",
-            "GetView", "GetRuntimeStatus", "TestPython",
+            "ResourceOperations", "GetView", "GetRuntimeStatus", "TestPython",
         ]
         assert all(re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,127}", tool.name) for tool in tools)
         assert await server.mcp.list_prompts() == []
         help_schema = tools[0].inputSchema
         assert help_schema["properties"]["topic"]["enum"] == [
-            "start", "python", "documents", "workbenches", "inspection",
-            "validation", "fem", "cam", "blocked",
+            "start", "python", "documents", "workbenches", "resources",
+            "inspection", "validation", "fem", "cam", "blocked",
         ]
         document_schema = tools[1].inputSchema
         assert document_schema["required"] == ["action"]
@@ -30,7 +30,12 @@ def test_focused_python_and_document_tools_are_registered():
         assert execution_schema["properties"]["timeout_seconds"]["maximum"] == 3600
         inspection_schema = tools[3].inputSchema
         assert inspection_schema["properties"]["max_depth"]["maximum"] == 10
-        assert sum(len(tool.description.split()) for tool in tools) <= 245
+        resource_schema = tools[4].inputSchema
+        assert resource_schema["properties"]["action"]["enum"] == [
+            "providers", "search", "inspect", "insert",
+        ]
+        assert resource_schema["properties"]["limit"]["maximum"] == 50
+        assert sum(len(tool.description.split()) for tool in tools) <= 300
         assert "GetHelp(topic='start')" in server.mcp.instructions
         assert "never invent or rewrite" in server.mcp.instructions
     asyncio.run(inspect())
@@ -104,6 +109,17 @@ def test_document_inspection_returns_structured_result(monkeypatch):
     assert json.loads(result.content[0].text) == {
         "result": {"document": {"name": "Model"}},
     }
+
+
+def test_resource_operation_returns_structured_result(monkeypatch):
+    class Connection:
+        def resource_operations(self, *args):
+            assert args == ("providers", None, None, None, None, None, None, 10)
+            return {"success": True, "result": {"providers": []}}
+    monkeypatch.setattr(server.state, "freecad_connection", Connection())
+    result = asyncio.run(server.mcp.call_tool("ResourceOperations", {"action": "providers"}))
+    assert not result.isError
+    assert json.loads(result.content[0].text) == {"result": {"providers": []}}
 
 
 def test_unavailable_bridge_reports_connection_failure(monkeypatch):

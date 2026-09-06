@@ -22,6 +22,7 @@ from rpc_server.gui_dispatch import (
 from rpc_server.ip_filter import FilteredXMLRPCServer
 from rpc_server.python_session import PythonSession, MAX_CODE_CHARS
 from rpc_server.python_testing import PythonTestRunner, find_freecadcmd
+from rpc_server.resource_operations import resource_operations as perform_resource_operation
 from rpc_server.settings import load_settings
 from rpc_server.view_manager import save_view
 
@@ -150,6 +151,51 @@ class FreeCADRPC:
                 }
 
         result = dispatch_to_gui(perform, operation_name="inspect_document")
+        response = (
+            result if isinstance(result, dict) and result.get("success") is False
+            else {"success": True, "result": result}
+        )
+        return json.dumps(response, ensure_ascii=False, allow_nan=False)
+
+    def resource_operations(
+        self, action, query=None, provider=None, resource_id=None, document=None,
+        properties=None, attach_to=None, limit=10,
+    ) -> str:
+        """Search and insert resources through installed providers."""
+        values = {
+            "action": action, "query": query, "provider": provider,
+            "resource_id": resource_id, "document": document, "attach_to": attach_to,
+        }
+        if any(value is not None and not isinstance(value, str) for value in values.values()):
+            raise ValueError("resource string arguments must be strings or null")
+        if not isinstance(action, str) or action not in {"providers", "search", "inspect", "insert"}:
+            raise ValueError("unsupported resource action")
+        if any(isinstance(value, str) and len(value) > 1000 for value in values.values()):
+            raise ValueError("resource string arguments must be at most 1000 characters")
+        if properties is not None and (
+            not isinstance(properties, dict) or len(properties) > 50
+            or any(not isinstance(key, str) or len(key) > 100 for key in properties)
+            or any(not isinstance(value, (str, int, float, bool)) for value in properties.values())
+        ):
+            raise ValueError("properties must contain at most 50 scalar values")
+        if type(limit) is not int or not 1 <= limit <= 50:
+            raise ValueError("limit must be an integer between 1 and 50")
+
+        def perform():
+            try:
+                return perform_resource_operation(
+                    FreeCAD, FreeCADGui, action, query, provider, resource_id,
+                    document, properties, attach_to, limit,
+                )
+            except Exception as exc:
+                return {
+                    "success": False,
+                    "error": {"type": type(exc).__name__, "message": str(exc)},
+                }
+
+        result = dispatch_to_gui(
+            perform, operation_name=f"resource_operations:{action}",
+        )
         response = (
             result if isinstance(result, dict) and result.get("success") is False
             else {"success": True, "result": result}

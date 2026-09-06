@@ -30,17 +30,18 @@ The original conversation is available in the
 
 | Tool | Purpose |
 | --- | --- |
-| `GetHelp(topic="start")` | Learn the Python-first workflow and focused guidance for documents, workbenches, FEM, CAM, validation, or blockers. |
+| `GetHelp(topic="start")` | Learn the Python-first workflow and focused guidance for documents, workbenches, resources, FEM, CAM, validation, or blockers. |
 | `DocumentOperations(action, document=None, path=None, ...)` | List, create, open, activate, save, reload, or safely close live FreeCAD documents. |
 | `ExecutePython(code, timeout_seconds=90)` | Run Python in the live FreeCAD GUI, retaining variables between calls. |
 | `InspectDocument(document=None, object_name=None, properties=None, max_depth=6)` | Read the native GUI tree or focused object dependencies and property values. |
+| `ResourceOperations(action, ...)` | Discover, search, inspect, and insert components from installed providers such as Fasteners and Parts Library. |
 | `GetView(width=1024, height=768)` | Return the current 3D view as an MCP PNG image. |
 | `GetRuntimeStatus()` | Read FreeCAD version and execution health, even while the GUI is busy. |
 | `TestPython(code, document_path=None, timeout_seconds=60)` | Run assertions/scripts in a fresh FreeCADCmd process, optionally opening a saved document copy. |
 
-Document lifecycle has one focused tool. Objects, sketches, libraries,
-imports/exports, assemblies, and FEM are handled by the native Python API.
-There are no separate modeling tools.
+Document lifecycle and installed component resources each have one focused
+tool. Objects, sketches, imports/exports, assemblies, and FEM are handled by
+the native Python API. There are no separate modeling tools.
 
 ## Install the FreeCAD addon
 
@@ -194,6 +195,26 @@ assert abs(box.Shape.Volume - 6000) < 1e-6
 box.Shape.Volume
 ```
 
+### Insert installed components
+
+`ResourceOperations` provides one stable interface for component sources whose
+native FreeCAD APIs differ. Start with `action="providers"`, search one or all
+providers, inspect the returned stable resource ID, and insert it into an open
+document. For example, a Fasteners installation exposes parametric standards:
+
+```json
+{"action":"search","provider":"fasteners","query":"M8 socket head screw"}
+{"action":"inspect","resource_id":"fasteners:ISO4762","properties":{"Diameter":"M8"}}
+{"action":"insert","resource_id":"fasteners:ISO4762","document":"Assembly","properties":{"Diameter":"M8","Length":"25","Thread":false}}
+```
+
+Set `attach_to` to a stable subelement reference such as `Bracket.Edge1` when a
+fastener should use that attachment. File-backed addons are discovered without
+provider-specific code; the official Parts Library, for example, can be searched
+and its FCStd or STEP resources merged into the target document. Procedural
+workbenches require a small provider adapter because FreeCAD does not define a
+universal component-catalog API. The current procedural adapter is Fasteners.
+
 You can also assign `_result` explicitly in a cell that ends in a statement.
 `_` holds the last successful expression result. `App`/`FreeCAD` and
 `Gui`/`FreeCADGui` are restored before every cell. Use `import Part`,
@@ -279,6 +300,7 @@ this checkout. Use a separate user config and profile when launching it.
 FREECAD_MCP_INTEGRATION=1 uv run pytest -q -s tests/integration
 FREECAD_MCP_INTEGRATION=1 FREECAD_MCP_FEM=1 uv run pytest -q -s tests/integration
 FREECAD_MCP_INTEGRATION=1 FREECAD_MCP_CAM=1 uv run pytest -q -s tests/integration
+FREECAD_MCP_INTEGRATION=1 FREECAD_MCP_RESOURCES=1 uv run pytest -q -s tests/integration
 ```
 
 It checks the actual MCP protocol, document lifecycle and dirty-state guards,
@@ -289,7 +311,9 @@ preservation, forced timeout, abnormal exit and successful retry. The second
 command also executes real Gmsh/CalculiX. The third builds native facing,
 pocketing, drilling and profiling paths, posts GRBL G-code, completes the
 native voxel-removal simulation, saves the FCStd and reopens it in a fresh
-FreeCADCmd process.
+FreeCADCmd process. The fourth discovers the installed Fasteners and official
+Parts Library addons, inspects and inserts real resources through the MCP tool,
+and validates the resulting document.
 Set `FREECAD_MCP_HOST`/`FREECAD_MCP_PORT` to target a different test bridge.
 The FEM test may configure bundled solver paths in that isolated profile.
 Set `FREECAD_MCP_IMAGE_PATH` to save its captured PNG for inspection. Live

@@ -3,6 +3,7 @@
 FREECAD_MCP_INTEGRATION=1 uv run pytest -q -s tests/integration
 Set FREECAD_MCP_FEM=1 to also require installed Gmsh and CalculiX.
 Set FREECAD_MCP_CAM=1 to also build, post, simulate and reopen a CAM Job.
+Set FREECAD_MCP_RESOURCES=1 to require Fasteners and FreeCAD Parts Library.
 """
 
 import asyncio
@@ -39,7 +40,7 @@ async def exercise():
             tools = await session.list_tools()
             assert [tool.name for tool in tools.tools] == [
                 "GetHelp", "DocumentOperations", "ExecutePython", "InspectDocument",
-                "GetView", "GetRuntimeStatus", "TestPython",
+                "ResourceOperations", "GetView", "GetRuntimeStatus", "TestPython",
             ]
 
             async def call(name, args=None, success=True):
@@ -227,6 +228,63 @@ async def exercise():
                     "assert copy_doc.getObject('Box').Shape.Volume == 6000\n"
                     "App.setActiveDocument(doc.Name)"
                 )
+
+                if os.environ.get("FREECAD_MCP_RESOURCES") == "1":
+                    providers = await call("ResourceOperations", {"action": "providers"})
+                    provider_ids = {
+                        item["id"] for item in providers["result"]["providers"]
+                    }
+                    assert {"fasteners", "parts_library"} <= provider_ids, providers
+
+                    created_resources = await call("DocumentOperations", {
+                        "action": "new", "document": "MCP Resource Integration",
+                    })
+                    resource_doc = created_resources["result"]["name"]
+                    await run(f"integration_docs.append({resource_doc!r})")
+
+                    screws = await call("ResourceOperations", {
+                        "action": "search", "provider": "fasteners",
+                        "query": "ISO 4762 socket head cap screw", "limit": 5,
+                    })
+                    screw_ids = {item["id"] for item in screws["result"]["matches"]}
+                    assert "fasteners:ISO4762" in screw_ids, screws
+                    screw_info = await call("ResourceOperations", {
+                        "action": "inspect", "resource_id": "fasteners:ISO4762",
+                        "properties": {"Diameter": "M8"},
+                    })
+                    assert "M8" in screw_info["result"]["diameters"]
+                    assert "25" in screw_info["result"]["lengths"]
+                    inserted_screw = await call("ResourceOperations", {
+                        "action": "insert", "resource_id": "fasteners:ISO4762",
+                        "document": resource_doc,
+                        "properties": {"Diameter": "M8", "Length": "25", "Thread": False},
+                    })
+                    screw = inserted_screw["result"]
+                    assert screw["shape"]["solids"] == 1
+                    assert screw["shape"]["volume"] > 0
+
+                    bearings = await call("ResourceOperations", {
+                        "action": "search", "provider": "parts_library",
+                        "query": "608ZZ Ball Bearing", "limit": 5,
+                    })
+                    bearing = next(
+                        item for item in bearings["result"]["matches"]
+                        if item["path"].endswith("608ZZ_Ball_Bearing.fcstd")
+                    )
+                    bearing_info = await call("ResourceOperations", {
+                        "action": "inspect", "resource_id": bearing["id"],
+                    })
+                    assert bearing_info["result"]["format"].casefold() == "fcstd"
+                    inserted_bearing = await call("ResourceOperations", {
+                        "action": "insert", "resource_id": bearing["id"],
+                        "document": resource_doc,
+                    })
+                    assert inserted_bearing["result"]["objects"]
+                    inspected_resources = await call("InspectDocument", {
+                        "document": resource_doc,
+                    })
+                    assert inspected_resources["result"]["document"]["object_count"] >= 2
+                    print("REAL_FREECAD_RESOURCE_OPERATIONS_PASS")
 
                 # Assertions fail and are corrected in fresh native FreeCADCmds.
                 failed_test = await call("TestPython", {"code": (

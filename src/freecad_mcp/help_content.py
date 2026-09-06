@@ -8,6 +8,7 @@ HelpTopic = Literal[
     "python",
     "documents",
     "workbenches",
+    "resources",
     "inspection",
     "validation",
     "fem",
@@ -20,10 +21,10 @@ _HELP: dict[str, dict] = {
     "start": {
         "guidance": [
             "This MCP is Python-first. Use ExecutePython for modeling and every workbench API; do not wait for dedicated CAD-operation tools.",
-            "Use DocumentOperations for .FCStd lifecycle, InspectDocument for the native tree, GetView for visual evidence, and TestPython for isolated assertions.",
+            "Use DocumentOperations for .FCStd lifecycle, ResourceOperations for installed components, InspectDocument for the native tree, GetView for visual evidence, and TestPython for isolated assertions.",
             "Call GetHelp again for the task topic before guessing API names.",
         ],
-        "related": ["python", "documents", "workbenches", "validation", "blocked"],
+        "related": ["python", "documents", "workbenches", "resources", "validation", "blocked"],
     },
     "python": {
         "guidance": [
@@ -50,7 +51,16 @@ _HELP: dict[str, dict] = {
             "Use module.__file__, dir(), help(), and inspect.signature() against the running installation because workbench APIs vary by FreeCAD version.",
             "GUI-only dialogs, hardware, and external solvers still require explicit acceptance tests.",
         ],
-        "related": ["python", "validation", "fem", "cam", "blocked"],
+        "related": ["python", "resources", "validation", "fem", "cam", "blocked"],
+    },
+    "resources": {
+        "guidance": [
+            "ResourceOperations provides one interface for installed component providers such as Fasteners and Parts Library.",
+            "Call action=providers, then search with a short query. Use the returned stable resource_id with inspect before insert when sizes or parameters matter.",
+            "insert requires the internal document name. Fasteners accept properties such as Diameter, Length, and Thread; attach_to uses ObjectName.Edge1 or ObjectName.Face1.",
+            "File-backed FCStd and STEP resources are discovered dynamically. Search results are references; nothing is inserted until action=insert.",
+        ],
+        "related": ["documents", "workbenches", "inspection", "validation"],
     },
     "inspection": {
         "guidance": [

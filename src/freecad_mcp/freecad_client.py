@@ -56,6 +56,17 @@ class FreeCADConnection:
             timeout=90,
         ))
 
+    def resource_operations(
+        self, action: str, query: str | None = None, provider: str | None = None,
+        resource_id: str | None = None, document: str | None = None,
+        properties: dict | None = None, attach_to: str | None = None,
+        limit: int = 10,
+    ) -> dict:
+        return json.loads(self._call(
+            "resource_operations", action, query, provider, resource_id,
+            document, properties, attach_to, limit, timeout=120,
+        ))
+
     def get_view(self, width: int = 1024, height: int = 768) -> str:
         return self._call("get_view", width, height, timeout=90)
 

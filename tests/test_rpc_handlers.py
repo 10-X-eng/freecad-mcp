@@ -108,6 +108,26 @@ def test_document_inspection_runs_through_dispatch_and_xmlrpc(rpc_module):
     }}
 
 
+def test_resource_operations_run_through_dispatch_and_xmlrpc(rpc_module):
+    rpc_module.perform_resource_operation = lambda *args: {
+        "providers": [{"id": "fasteners"}], "received": list(args[2:]),
+    }
+    with running_server(rpc_module.FreeCADRPC()) as (host, port), client(host, port, 5) as proxy:
+        result = json.loads(proxy.resource_operations(
+            "search", "socket screw", "fasteners", None, None, None, None, 5,
+        ))
+    assert result == {"success": True, "result": {
+        "providers": [{"id": "fasteners"}],
+        "received": ["search", "socket screw", "fasteners", None, None, None, None, 5],
+    }}
+
+
+@pytest.mark.parametrize("limit", [0, 51, True, "5"])
+def test_invalid_resource_limit_is_rejected(rpc_module, limit):
+    with pytest.raises(ValueError, match="limit"):
+        rpc_module.FreeCADRPC().resource_operations("providers", limit=limit)
+
+
 def test_python_status_responds_while_cell_runs(rpc_module):
     rpc = rpc_module.FreeCADRPC()
     rpc_module.FreeCAD.Version = lambda: ["1", "1", "3"]

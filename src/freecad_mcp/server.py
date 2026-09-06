@@ -58,7 +58,7 @@ mcp = FastMCP(
 @mcp.tool(name="GetHelp", structured_output=False)
 async def get_help(topic: HelpTopic = "start") -> CallToolResult:
     """Get focused operating guidance. Start with topic=start. Other topics:
-    python, documents, workbenches, inspection, validation, fem, cam, blocked.
+    python, documents, workbenches, resources, inspection, validation, fem, cam, blocked.
     """
     return CallToolResult(content=[TextContent(
         type="text",
@@ -134,6 +134,28 @@ async def inspect_document(
     return await rpc_call(
         connection().inspect_document,
         document, object_name, properties, max_depth,
+    )
+
+
+@mcp.tool(name="ResourceOperations", structured_output=False)
+async def resource_operations(
+    action: Literal["providers", "search", "inspect", "insert"],
+    query: Annotated[str | None, Field(max_length=1000)] = None,
+    provider: Annotated[str | None, Field(max_length=1000)] = None,
+    resource_id: Annotated[str | None, Field(max_length=1000)] = None,
+    document: Annotated[str | None, Field(max_length=1000)] = None,
+    properties: dict[str, str | int | float | bool] | None = None,
+    attach_to: Annotated[str | None, Field(max_length=1000)] = None,
+    limit: Annotated[int, Field(ge=1, le=50)] = 10,
+) -> CallToolResult:
+    """Use installed component providers through one interface. providers lists
+    them; search(query, optional provider) returns stable IDs; inspect(resource_id,
+    optional properties) returns choices; insert(resource_id, document, optional
+    properties/attach_to). attach_to is ObjectName.Edge1 or ObjectName.Face1.
+    """
+    return await rpc_call(
+        connection().resource_operations,
+        action, query, provider, resource_id, document, properties, attach_to, limit,
     )
 
 

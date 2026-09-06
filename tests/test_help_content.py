@@ -5,8 +5,8 @@ from freecad_mcp.help_content import HELP_TOPICS, get_help_content
 
 def test_every_help_topic_is_concise_and_connected():
     assert HELP_TOPICS == (
-        "start", "python", "documents", "workbenches", "inspection",
-        "validation", "fem", "cam", "blocked",
+        "start", "python", "documents", "workbenches", "resources",
+        "inspection", "validation", "fem", "cam", "blocked",
     )
     for topic in HELP_TOPICS:
         content = get_help_content(topic)
